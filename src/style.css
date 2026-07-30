@@ -68,6 +68,15 @@ body {
   font-size: 0.98rem;
 }
 
+.brand p.hint {
+  font-size: 0.88rem;
+}
+
+.brand p.hint strong {
+  font-weight: 650;
+  color: var(--accent-deep);
+}
+
 .back {
   flex: 0 0 auto;
   width: 2.4rem;
@@ -154,6 +163,17 @@ body {
   display: flex;
   flex-direction: column;
   gap: 0.35rem;
+  padding: 0.65rem 0.75rem;
+  margin: 0 -0.75rem;
+  border-radius: 12px;
+  transition: background 0.15s ease;
+}
+
+.field-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
 }
 
 .field-label {
@@ -161,6 +181,25 @@ body {
   font-weight: 600;
   color: var(--muted);
   letter-spacing: 0.01em;
+}
+
+.solve-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--muted);
+  cursor: pointer;
+  user-select: none;
+}
+
+.solve-toggle input {
+  width: 1.05rem;
+  height: 1.05rem;
+  margin: 0;
+  accent-color: var(--accent);
+  cursor: pointer;
 }
 
 .field-controls {
@@ -194,6 +233,30 @@ select:focus {
   background: #fff;
 }
 
+input[type='number'][readonly] {
+  border-color: transparent;
+  background: transparent;
+  font-size: clamp(1.35rem, 5vw, 1.75rem);
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  color: var(--accent-deep);
+  cursor: default;
+}
+
+input[type='number'][readonly]:focus {
+  outline: none;
+  background: transparent;
+}
+
+.field.is-solved {
+  background: var(--accent-soft);
+}
+
+.field.is-solved .field-label,
+.field.is-solved .solve-toggle {
+  color: var(--accent-deep);
+}
+
 select {
   min-width: 6.5rem;
   cursor: pointer;
@@ -210,43 +273,13 @@ select {
   white-space: nowrap;
 }
 
-.result {
-  margin-top: 0.35rem;
-  padding: 1rem;
-  border-radius: 12px;
-  background: var(--accent-soft);
-}
-
-.result-label {
-  display: block;
-  font-size: 0.85rem;
-  font-weight: 600;
+.field.is-solved .unit-static {
   color: var(--accent-deep);
-  margin-bottom: 0.35rem;
-}
-
-.result-row {
-  display: grid;
-  grid-template-columns: 1fr auto;
-  gap: 0.5rem;
-  align-items: center;
-}
-
-.result-row:has(> :only-child) {
-  grid-template-columns: 1fr;
-}
-
-.result-value {
-  display: block;
-  font-size: clamp(1.6rem, 6vw, 2rem);
-  font-weight: 700;
-  letter-spacing: -0.02em;
-  color: var(--accent-deep);
-  line-height: 1.2;
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .calc-link {
+  .calc-link,
+  .field {
     transition: none;
   }
 

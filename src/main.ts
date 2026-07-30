@@ -1,16 +1,39 @@
 import './style.css'
 import {
   dosageRate,
+  dosagePpm,
+  dosageBblsPerDay,
   displacementBbls,
+  displacementDiameterIn,
+  displacementLengthFt,
   liquidVelocityFps,
+  liquidRateBblsPerDay,
+  liquidDiameterIn,
   gasVelocityFps,
+  gasRateMcfdFromVelocity,
+  gasDiameterIn,
+  gasPressurePsig,
   ionLbsPerDay,
+  ionMgLFromLbs,
+  ionVolumeFromLbs,
   toInches,
+  fromInches,
   toFeet,
+  fromFeet,
+  toBbls,
   fromBbls,
+  toFps,
   fromFps,
   toMcfd,
+  fromMcfd,
+  rateToGalsPerDay,
   formatResult,
+  type RateUnit,
+  type DiaUnit,
+  type LenUnit,
+  type VolUnit,
+  type VelUnit,
+  type GasRateUnit,
 } from './calculations'
 
 type CalcId =
@@ -25,27 +48,27 @@ const CALCS: { id: Exclude<CalcId, 'home'>; title: string; blurb: string }[] = [
   {
     id: 'dosage',
     title: 'Dosage Calculation',
-    blurb: 'Target PPM and barrels/day → chemical feed rate',
+    blurb: 'PPM, barrels/day, and chemical rate — solve for any',
   },
   {
     id: 'displacement',
     title: 'Line Displacement Volume',
-    blurb: 'Pipe diameter and length → displacement volume',
+    blurb: 'Diameter, length, and volume — solve for any',
   },
   {
     id: 'liquid-velocity',
     title: 'Liquid Velocity',
-    blurb: 'Barrels/day and diameter → line velocity',
+    blurb: 'Flow rate, diameter, and velocity — solve for any',
   },
   {
     id: 'gas-velocity',
     title: 'Gas Velocity',
-    blurb: 'Gas rate, diameter, and pressure → velocity',
+    blurb: 'Gas rate, diameter, pressure, and velocity — solve for any',
   },
   {
     id: 'ion-lbs',
     title: 'mg/L to Lbs/Day',
-    blurb: 'Ion concentration and volume → pounds per day',
+    blurb: 'Concentration, volume, and lbs/day — solve for any',
   },
 ]
 
@@ -56,19 +79,25 @@ function num(el: HTMLInputElement): number {
   return Number.isFinite(v) ? v : NaN
 }
 
-function field(
-  label: string,
-  opts: {
-    id: string
-    value: number | string
-    step?: string
-    min?: string
-    unit?: string
-    unitOptions?: { value: string; label: string }[]
-    unitId?: string
-    unitValue?: string
-  },
-): string {
+function setNum(el: HTMLInputElement, value: number): void {
+  el.value = formatResult(value) === '—' ? '' : formatResult(value)
+}
+
+type FieldOpts = {
+  id: string
+  value: number | string
+  step?: string
+  min?: string
+  unit?: string
+  unitOptions?: { value: string; label: string }[]
+  unitId?: string
+  unitValue?: string
+  /** Variable key for solve-for; omit to hide checkbox. */
+  solveKey?: string
+  solved?: boolean
+}
+
+function field(label: string, opts: FieldOpts): string {
   let unitHtml = ''
   if (opts.unitOptions && opts.unitId) {
     unitHtml = `<select id="${opts.unitId}" aria-label="${label} units">
@@ -83,9 +112,26 @@ function field(
     unitHtml = `<span class="unit-static">${opts.unit}</span>`
   }
 
+  const solveHtml =
+    opts.solveKey !== undefined
+      ? `<label class="solve-toggle" title="Solve for ${label}">
+          <input
+            type="checkbox"
+            class="solve-check"
+            data-solve="${opts.solveKey}"
+            ${opts.solved ? 'checked' : ''}
+            aria-label="Solve for ${label}"
+          />
+          <span>Solve</span>
+        </label>`
+      : ''
+
   return `
-    <label class="field">
-      <span class="field-label">${label}</span>
+    <div class="field${opts.solved ? ' is-solved' : ''}" data-field="${opts.solveKey ?? opts.id}">
+      <div class="field-header">
+        <span class="field-label">${label}</span>
+        ${solveHtml}
+      </div>
       <span class="field-controls">
         <input
           id="${opts.id}"
@@ -94,20 +140,9 @@ function field(
           value="${opts.value}"
           step="${opts.step ?? 'any'}"
           ${opts.min !== undefined ? `min="${opts.min}"` : ''}
+          ${opts.solved ? 'readonly tabindex="-1"' : ''}
         />
         ${unitHtml}
-      </span>
-    </label>
-  `
-}
-
-function resultBlock(id: string, label: string, unitSelectHtml = ''): string {
-  return `
-    <div class="result" role="status" aria-live="polite">
-      <span class="result-label">${label}</span>
-      <span class="result-row">
-        <output id="${id}" class="result-value">—</output>
-        ${unitSelectHtml}
       </span>
     </div>
   `
@@ -120,7 +155,7 @@ function shell(title: string, body: string, showBack: boolean): string {
         ${showBack ? `<button type="button" class="back" id="back" aria-label="Back to calculators">←</button>` : ''}
         <div class="brand-text">
           <h1>${showBack ? title : 'ChemCalc'}</h1>
-          ${showBack ? '' : '<p>Oilfield chemistry &amp; line calculations</p>'}
+          ${showBack ? '<p class="hint">Check <strong>Solve</strong> next to the variable you want to find</p>' : '<p>Oilfield chemistry &amp; line calculations</p>'}
         </div>
       </header>
       <section class="workspace" aria-label="${title}">
@@ -157,13 +192,53 @@ function wireBack(): void {
   app.querySelector('#back')?.addEventListener('click', () => navigate('home'))
 }
 
-function onInputs(ids: string[], update: () => void): void {
-  for (const id of ids) {
-    const el = app.querySelector(`#${id}`)
-    el?.addEventListener('input', update)
-    el?.addEventListener('change', update)
+/** Exclusive solve-for checkboxes + live recalculation. */
+function wireSolveForm(
+  defaultSolve: string,
+  inputIds: string[],
+  compute: (solveFor: string) => void,
+): void {
+  let solveFor = defaultSolve
+
+  const applySolveUi = () => {
+    app.querySelectorAll<HTMLElement>('.field[data-field]').forEach((wrap) => {
+      const key = wrap.dataset.field!
+      const isSolved = key === solveFor
+      wrap.classList.toggle('is-solved', isSolved)
+      const input = wrap.querySelector<HTMLInputElement>('input[type="number"]')
+      const check = wrap.querySelector<HTMLInputElement>('.solve-check')
+      if (input) {
+        input.readOnly = isSolved
+        if (isSolved) input.tabIndex = -1
+        else input.removeAttribute('tabindex')
+      }
+      if (check) check.checked = isSolved
+    })
   }
-  update()
+
+  app.querySelectorAll<HTMLInputElement>('.solve-check').forEach((check) => {
+    check.addEventListener('change', () => {
+      if (check.checked) {
+        solveFor = check.dataset.solve!
+      } else if (check.dataset.solve === solveFor) {
+        // Keep exactly one selected
+        check.checked = true
+        return
+      }
+      applySolveUi()
+      compute(solveFor)
+    })
+  })
+
+  const run = () => compute(solveFor)
+  for (const id of inputIds) {
+    const el = app.querySelector(`#${id}`)
+    el?.addEventListener('input', run)
+    el?.addEventListener('change', run)
+  }
+
+  applySolveUi()
+  run()
 }
 
 function renderDosage(): void {
@@ -171,36 +246,55 @@ function renderDosage(): void {
     'Dosage Calculation',
     `
       <form class="calc-form" id="form">
-        ${field('Target PPM', { id: 'ppm', value: 238, min: '0', unit: 'PPM' })}
+        ${field('Target PPM', {
+          id: 'ppm',
+          value: 238,
+          min: '0',
+          unit: 'PPM',
+          solveKey: 'ppm',
+        })}
         ${field('Volume', {
           id: 'bbls',
           value: 144000,
           min: '0',
           unit: 'Bbls/Day',
+          solveKey: 'bbls',
         })}
-        ${resultBlock(
-          'out',
-          'Chemical rate',
-          `<select id="out-unit" aria-label="Output units">
-            <option value="Gals/Min" selected>Gals/Min</option>
-            <option value="Gals/Hr">Gals/Hr</option>
-            <option value="Gals/Day">Gals/Day</option>
-          </select>`,
-        )}
+        ${field('Chemical rate', {
+          id: 'rate',
+          value: '',
+          min: '0',
+          unitOptions: [
+            { value: 'Gals/Min', label: 'Gals/Min' },
+            { value: 'Gals/Hr', label: 'Gals/Hr' },
+            { value: 'Gals/Day', label: 'Gals/Day' },
+          ],
+          unitId: 'rate-unit',
+          unitValue: 'Gals/Min',
+          solveKey: 'rate',
+          solved: true,
+        })}
       </form>
     `,
     true,
   )
   wireBack()
-  onInputs(['ppm', 'bbls', 'out-unit'], () => {
-    const ppm = num(app.querySelector('#ppm')!)
-    const bbls = num(app.querySelector('#bbls')!)
-    const outUnit = (app.querySelector('#out-unit') as HTMLSelectElement).value as
-      | 'Gals/Day'
-      | 'Gals/Hr'
-      | 'Gals/Min'
-    const out = app.querySelector('#out')!
-    out.textContent = formatResult(dosageRate(ppm, bbls, outUnit))
+  wireSolveForm('rate', ['ppm', 'bbls', 'rate', 'rate-unit'], (solveFor) => {
+    const ppmEl = app.querySelector<HTMLInputElement>('#ppm')!
+    const bblsEl = app.querySelector<HTMLInputElement>('#bbls')!
+    const rateEl = app.querySelector<HTMLInputElement>('#rate')!
+    const rateUnit = (app.querySelector('#rate-unit') as HTMLSelectElement)
+      .value as RateUnit
+
+    if (solveFor === 'rate') {
+      setNum(rateEl, dosageRate(num(ppmEl), num(bblsEl), rateUnit))
+    } else if (solveFor === 'ppm') {
+      const gpd = rateToGalsPerDay(num(rateEl), rateUnit)
+      setNum(ppmEl, dosagePpm(gpd, num(bblsEl)))
+    } else {
+      const gpd = rateToGalsPerDay(num(rateEl), rateUnit)
+      setNum(bblsEl, dosageBblsPerDay(gpd, num(ppmEl)))
+    }
   })
 }
 
@@ -219,6 +313,7 @@ function renderDisplacement(): void {
           ],
           unitId: 'dia-unit',
           unitValue: 'in',
+          solveKey: 'dia',
         })}
         ${field('Line length', {
           id: 'len',
@@ -231,38 +326,62 @@ function renderDisplacement(): void {
           ],
           unitId: 'len-unit',
           unitValue: 'ft',
+          solveKey: 'len',
         })}
-        ${resultBlock(
-          'out',
-          'Displacement volume',
-          `<select id="out-unit" aria-label="Output units">
-            <option value="Bbls" selected>Bbls</option>
-            <option value="m3">m³</option>
-            <option value="Gals">Gals</option>
-          </select>`,
-        )}
+        ${field('Displacement volume', {
+          id: 'vol',
+          value: '',
+          min: '0',
+          unitOptions: [
+            { value: 'Bbls', label: 'Bbls' },
+            { value: 'm3', label: 'm³' },
+            { value: 'Gals', label: 'Gals' },
+          ],
+          unitId: 'vol-unit',
+          unitValue: 'Bbls',
+          solveKey: 'vol',
+          solved: true,
+        })}
       </form>
     `,
     true,
   )
   wireBack()
-  onInputs(['dia', 'len', 'dia-unit', 'len-unit', 'out-unit'], () => {
-    const diaIn = toInches(
-      num(app.querySelector('#dia')!),
-      (app.querySelector('#dia-unit') as HTMLSelectElement).value as 'in' | 'mm',
-    )
-    const lenFt = toFeet(
-      num(app.querySelector('#len')!),
-      (app.querySelector('#len-unit') as HTMLSelectElement).value as
-        | 'ft'
-        | 'miles'
-        | 'km',
-    )
-    const outUnit = (app.querySelector('#out-unit') as HTMLSelectElement)
-      .value as 'Bbls' | 'm3' | 'Gals'
-    const bbls = displacementBbls(diaIn, lenFt)
-    app.querySelector('#out')!.textContent = formatResult(fromBbls(bbls, outUnit))
-  })
+  wireSolveForm(
+    'vol',
+    ['dia', 'len', 'vol', 'dia-unit', 'len-unit', 'vol-unit'],
+    (solveFor) => {
+      const diaEl = app.querySelector<HTMLInputElement>('#dia')!
+      const lenEl = app.querySelector<HTMLInputElement>('#len')!
+      const volEl = app.querySelector<HTMLInputElement>('#vol')!
+      const diaUnit = (app.querySelector('#dia-unit') as HTMLSelectElement)
+        .value as DiaUnit
+      const lenUnit = (app.querySelector('#len-unit') as HTMLSelectElement)
+        .value as LenUnit
+      const volUnit = (app.querySelector('#vol-unit') as HTMLSelectElement)
+        .value as VolUnit
+
+      if (solveFor === 'vol') {
+        const bbls = displacementBbls(
+          toInches(num(diaEl), diaUnit),
+          toFeet(num(lenEl), lenUnit),
+        )
+        setNum(volEl, fromBbls(bbls, volUnit))
+      } else if (solveFor === 'dia') {
+        const diaIn = displacementDiameterIn(
+          toBbls(num(volEl), volUnit),
+          toFeet(num(lenEl), lenUnit),
+        )
+        setNum(diaEl, fromInches(diaIn, diaUnit))
+      } else {
+        const lenFt = displacementLengthFt(
+          toBbls(num(volEl), volUnit),
+          toInches(num(diaEl), diaUnit),
+        )
+        setNum(lenEl, fromFeet(lenFt, lenUnit))
+      }
+    },
+  )
 }
 
 function renderLiquidVelocity(): void {
@@ -275,6 +394,7 @@ function renderLiquidVelocity(): void {
           value: 500000,
           min: '0',
           unit: 'Bbls/Day',
+          solveKey: 'rate',
         })}
         ${field('Diameter', {
           id: 'dia',
@@ -286,31 +406,59 @@ function renderLiquidVelocity(): void {
           ],
           unitId: 'dia-unit',
           unitValue: 'in',
+          solveKey: 'dia',
         })}
-        ${resultBlock(
-          'out',
-          'Velocity',
-          `<select id="out-unit" aria-label="Output units">
-            <option value="ft/sec" selected>ft/sec</option>
-            <option value="m/sec">m/sec</option>
-          </select>`,
-        )}
+        ${field('Velocity', {
+          id: 'vel',
+          value: '',
+          min: '0',
+          unitOptions: [
+            { value: 'ft/sec', label: 'ft/sec' },
+            { value: 'm/sec', label: 'm/sec' },
+          ],
+          unitId: 'vel-unit',
+          unitValue: 'ft/sec',
+          solveKey: 'vel',
+          solved: true,
+        })}
       </form>
     `,
     true,
   )
   wireBack()
-  onInputs(['rate', 'dia', 'dia-unit', 'out-unit'], () => {
-    const rate = num(app.querySelector('#rate')!)
-    const diaIn = toInches(
-      num(app.querySelector('#dia')!),
-      (app.querySelector('#dia-unit') as HTMLSelectElement).value as 'in' | 'mm',
-    )
-    const outUnit = (app.querySelector('#out-unit') as HTMLSelectElement)
-      .value as 'ft/sec' | 'm/sec'
-    const fps = liquidVelocityFps(rate, diaIn)
-    app.querySelector('#out')!.textContent = formatResult(fromFps(fps, outUnit))
-  })
+  wireSolveForm(
+    'vel',
+    ['rate', 'dia', 'vel', 'dia-unit', 'vel-unit'],
+    (solveFor) => {
+      const rateEl = app.querySelector<HTMLInputElement>('#rate')!
+      const diaEl = app.querySelector<HTMLInputElement>('#dia')!
+      const velEl = app.querySelector<HTMLInputElement>('#vel')!
+      const diaUnit = (app.querySelector('#dia-unit') as HTMLSelectElement)
+        .value as DiaUnit
+      const velUnit = (app.querySelector('#vel-unit') as HTMLSelectElement)
+        .value as VelUnit
+
+      if (solveFor === 'vel') {
+        const fps = liquidVelocityFps(
+          num(rateEl),
+          toInches(num(diaEl), diaUnit),
+        )
+        setNum(velEl, fromFps(fps, velUnit))
+      } else if (solveFor === 'rate') {
+        const bpd = liquidRateBblsPerDay(
+          toFps(num(velEl), velUnit),
+          toInches(num(diaEl), diaUnit),
+        )
+        setNum(rateEl, bpd)
+      } else {
+        const diaIn = liquidDiameterIn(
+          num(rateEl),
+          toFps(num(velEl), velUnit),
+        )
+        setNum(diaEl, fromInches(diaIn, diaUnit))
+      }
+    },
+  )
 }
 
 function renderGasVelocity(): void {
@@ -329,6 +477,7 @@ function renderGasVelocity(): void {
           ],
           unitId: 'rate-unit',
           unitValue: 'MCFD',
+          solveKey: 'rate',
         })}
         ${field('Diameter', {
           id: 'dia',
@@ -340,44 +489,81 @@ function renderGasVelocity(): void {
           ],
           unitId: 'dia-unit',
           unitValue: 'in',
+          solveKey: 'dia',
         })}
         ${field('Line pressure', {
           id: 'psig',
           value: 105.3,
           min: '0',
           unit: 'psig',
+          solveKey: 'psig',
         })}
-        ${resultBlock(
-          'out',
-          'Velocity',
-          `<select id="out-unit" aria-label="Output units">
-            <option value="ft/sec" selected>ft/sec</option>
-            <option value="m/sec">m/sec</option>
-          </select>`,
-        )}
+        ${field('Velocity', {
+          id: 'vel',
+          value: '',
+          min: '0',
+          unitOptions: [
+            { value: 'ft/sec', label: 'ft/sec' },
+            { value: 'm/sec', label: 'm/sec' },
+          ],
+          unitId: 'vel-unit',
+          unitValue: 'ft/sec',
+          solveKey: 'vel',
+          solved: true,
+        })}
       </form>
     `,
     true,
   )
   wireBack()
-  onInputs(['rate', 'rate-unit', 'dia', 'dia-unit', 'psig', 'out-unit'], () => {
-    const mcfd = toMcfd(
-      num(app.querySelector('#rate')!),
-      (app.querySelector('#rate-unit') as HTMLSelectElement).value as
-        | 'MCFD'
-        | 'MMCFD'
-        | 'M3/Day',
-    )
-    const diaIn = toInches(
-      num(app.querySelector('#dia')!),
-      (app.querySelector('#dia-unit') as HTMLSelectElement).value as 'in' | 'mm',
-    )
-    const psig = num(app.querySelector('#psig')!)
-    const outUnit = (app.querySelector('#out-unit') as HTMLSelectElement)
-      .value as 'ft/sec' | 'm/sec'
-    const fps = gasVelocityFps(mcfd, diaIn, psig)
-    app.querySelector('#out')!.textContent = formatResult(fromFps(fps, outUnit))
-  })
+  wireSolveForm(
+    'vel',
+    ['rate', 'rate-unit', 'dia', 'dia-unit', 'psig', 'vel', 'vel-unit'],
+    (solveFor) => {
+      const rateEl = app.querySelector<HTMLInputElement>('#rate')!
+      const diaEl = app.querySelector<HTMLInputElement>('#dia')!
+      const psigEl = app.querySelector<HTMLInputElement>('#psig')!
+      const velEl = app.querySelector<HTMLInputElement>('#vel')!
+      const rateUnit = (app.querySelector('#rate-unit') as HTMLSelectElement)
+        .value as GasRateUnit
+      const diaUnit = (app.querySelector('#dia-unit') as HTMLSelectElement)
+        .value as DiaUnit
+      const velUnit = (app.querySelector('#vel-unit') as HTMLSelectElement)
+        .value as VelUnit
+
+      if (solveFor === 'vel') {
+        const fps = gasVelocityFps(
+          toMcfd(num(rateEl), rateUnit),
+          toInches(num(diaEl), diaUnit),
+          num(psigEl),
+        )
+        setNum(velEl, fromFps(fps, velUnit))
+      } else if (solveFor === 'rate') {
+        const mcfd = gasRateMcfdFromVelocity(
+          toFps(num(velEl), velUnit),
+          toInches(num(diaEl), diaUnit),
+          num(psigEl),
+        )
+        setNum(rateEl, fromMcfd(mcfd, rateUnit))
+      } else if (solveFor === 'dia') {
+        const diaIn = gasDiameterIn(
+          toMcfd(num(rateEl), rateUnit),
+          toFps(num(velEl), velUnit),
+          num(psigEl),
+        )
+        setNum(diaEl, fromInches(diaIn, diaUnit))
+      } else {
+        setNum(
+          psigEl,
+          gasPressurePsig(
+            toMcfd(num(rateEl), rateUnit),
+            toInches(num(diaEl), diaUnit),
+            toFps(num(velEl), velUnit),
+          ),
+        )
+      }
+    },
+  )
 }
 
 function renderIonLbs(): void {
@@ -390,23 +576,40 @@ function renderIonLbs(): void {
           value: 40,
           min: '0',
           unit: 'mg/L',
+          solveKey: 'mgL',
         })}
         ${field('Volume', {
           id: 'vol',
           value: 2000,
           min: '0',
           unit: 'Bbls/Day',
+          solveKey: 'vol',
         })}
-        ${resultBlock('out', 'Ion mass rate', `<span class="unit-static">Lbs/Day</span>`)}
+        ${field('Ion mass rate', {
+          id: 'lbs',
+          value: '',
+          min: '0',
+          unit: 'Lbs/Day',
+          solveKey: 'lbs',
+          solved: true,
+        })}
       </form>
     `,
     true,
   )
   wireBack()
-  onInputs(['mgL', 'vol'], () => {
-    const mgL = num(app.querySelector('#mgL')!)
-    const vol = num(app.querySelector('#vol')!)
-    app.querySelector('#out')!.textContent = formatResult(ionLbsPerDay(mgL, vol))
+  wireSolveForm('lbs', ['mgL', 'vol', 'lbs'], (solveFor) => {
+    const mgLEl = app.querySelector<HTMLInputElement>('#mgL')!
+    const volEl = app.querySelector<HTMLInputElement>('#vol')!
+    const lbsEl = app.querySelector<HTMLInputElement>('#lbs')!
+
+    if (solveFor === 'lbs') {
+      setNum(lbsEl, ionLbsPerDay(num(mgLEl), num(volEl)))
+    } else if (solveFor === 'mgL') {
+      setNum(mgLEl, ionMgLFromLbs(num(lbsEl), num(volEl)))
+    } else {
+      setNum(volEl, ionVolumeFromLbs(num(lbsEl), num(mgLEl)))
+    }
   })
 }
 
