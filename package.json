@@ -1,0 +1,20 @@
+{
+  "name": "chemcalc",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc && vite build",
+    "preview": "vite preview",
+    "icons": "node scripts/generate-icons.mjs"
+  },
+  "devDependencies": {
+    "typescript": "~5.8.0",
+    "vite": "^6.4.3",
+    "vite-plugin-pwa": "^1.3.0"
+  },
+  "optionalDependencies": {
+    "@rollup/rollup-win32-arm64-msvc": "^4.62.2"
+  }
+}
