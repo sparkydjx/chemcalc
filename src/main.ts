@@ -257,7 +257,12 @@ function renderDosage(): void {
           id: 'bbls',
           value: 100,
           min: '0',
-          unit: 'Bbls/Day',
+          unitOptions: [
+            { value: 'Bbls', label: 'Bbls/Day' },
+            { value: 'm3', label: 'm³/Day' },
+          ],
+          unitId: 'vol-unit',
+          unitValue: 'Bbls',
           solveKey: 'bbls',
         })}
         ${field('Chemical rate', {
@@ -279,23 +284,30 @@ function renderDosage(): void {
     true,
   )
   wireBack()
-  wireSolveForm('rate', ['ppm', 'bbls', 'rate', 'rate-unit'], (solveFor) => {
-    const ppmEl = app.querySelector<HTMLInputElement>('#ppm')!
-    const bblsEl = app.querySelector<HTMLInputElement>('#bbls')!
-    const rateEl = app.querySelector<HTMLInputElement>('#rate')!
-    const rateUnit = (app.querySelector('#rate-unit') as HTMLSelectElement)
-      .value as RateUnit
+  wireSolveForm(
+    'rate',
+    ['ppm', 'bbls', 'rate', 'vol-unit', 'rate-unit'],
+    (solveFor) => {
+      const ppmEl = app.querySelector<HTMLInputElement>('#ppm')!
+      const bblsEl = app.querySelector<HTMLInputElement>('#bbls')!
+      const rateEl = app.querySelector<HTMLInputElement>('#rate')!
+      const volUnit = (app.querySelector('#vol-unit') as HTMLSelectElement)
+        .value as VolUnit
+      const rateUnit = (app.querySelector('#rate-unit') as HTMLSelectElement)
+        .value as RateUnit
+      const bblsPerDay = toBbls(num(bblsEl), volUnit)
 
-    if (solveFor === 'rate') {
-      setNum(rateEl, dosageRate(num(ppmEl), num(bblsEl), rateUnit))
-    } else if (solveFor === 'ppm') {
-      const gpd = rateToGalsPerDay(num(rateEl), rateUnit)
-      setNum(ppmEl, dosagePpm(gpd, num(bblsEl)))
-    } else {
-      const gpd = rateToGalsPerDay(num(rateEl), rateUnit)
-      setNum(bblsEl, dosageBblsPerDay(gpd, num(ppmEl)))
-    }
-  })
+      if (solveFor === 'rate') {
+        setNum(rateEl, dosageRate(num(ppmEl), bblsPerDay, rateUnit))
+      } else if (solveFor === 'ppm') {
+        const gpd = rateToGalsPerDay(num(rateEl), rateUnit)
+        setNum(ppmEl, dosagePpm(gpd, bblsPerDay))
+      } else {
+        const gpd = rateToGalsPerDay(num(rateEl), rateUnit)
+        setNum(bblsEl, fromBbls(dosageBblsPerDay(gpd, num(ppmEl)), volUnit))
+      }
+    },
+  )
 }
 
 function renderDisplacement(): void {
