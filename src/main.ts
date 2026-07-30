@@ -248,14 +248,14 @@ function renderDosage(): void {
       <form class="calc-form" id="form">
         ${field('Target PPM', {
           id: 'ppm',
-          value: 238,
+          value: 240,
           min: '0',
           unit: 'PPM',
           solveKey: 'ppm',
         })}
         ${field('Volume', {
           id: 'bbls',
-          value: 144000,
+          value: 100,
           min: '0',
           unit: 'Bbls/Day',
           solveKey: 'bbls',
@@ -270,7 +270,7 @@ function renderDosage(): void {
             { value: 'Gals/Day', label: 'Gals/Day' },
           ],
           unitId: 'rate-unit',
-          unitValue: 'Gals/Min',
+          unitValue: 'Gals/Day',
           solveKey: 'rate',
           solved: true,
         })}
