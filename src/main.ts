@@ -405,7 +405,12 @@ function renderLiquidVelocity(): void {
           id: 'rate',
           value: 500000,
           min: '0',
-          unit: 'Bbls/Day',
+          unitOptions: [
+            { value: 'Bbls', label: 'Bbls/Day' },
+            { value: 'm3', label: 'm³/Day' },
+          ],
+          unitId: 'rate-unit',
+          unitValue: 'Bbls',
           solveKey: 'rate',
         })}
         ${field('Diameter', {
@@ -440,19 +445,22 @@ function renderLiquidVelocity(): void {
   wireBack()
   wireSolveForm(
     'vel',
-    ['rate', 'dia', 'vel', 'dia-unit', 'vel-unit'],
+    ['rate', 'dia', 'vel', 'rate-unit', 'dia-unit', 'vel-unit'],
     (solveFor) => {
       const rateEl = app.querySelector<HTMLInputElement>('#rate')!
       const diaEl = app.querySelector<HTMLInputElement>('#dia')!
       const velEl = app.querySelector<HTMLInputElement>('#vel')!
+      const rateUnit = (app.querySelector('#rate-unit') as HTMLSelectElement)
+        .value as VolUnit
       const diaUnit = (app.querySelector('#dia-unit') as HTMLSelectElement)
         .value as DiaUnit
       const velUnit = (app.querySelector('#vel-unit') as HTMLSelectElement)
         .value as VelUnit
+      const bblsPerDay = toBbls(num(rateEl), rateUnit)
 
       if (solveFor === 'vel') {
         const fps = liquidVelocityFps(
-          num(rateEl),
+          bblsPerDay,
           toInches(num(diaEl), diaUnit),
         )
         setNum(velEl, fromFps(fps, velUnit))
@@ -461,10 +469,10 @@ function renderLiquidVelocity(): void {
           toFps(num(velEl), velUnit),
           toInches(num(diaEl), diaUnit),
         )
-        setNum(rateEl, bpd)
+        setNum(rateEl, fromBbls(bpd, rateUnit))
       } else {
         const diaIn = liquidDiameterIn(
-          num(rateEl),
+          bblsPerDay,
           toFps(num(velEl), velUnit),
         )
         setNum(diaEl, fromInches(diaIn, diaUnit))
@@ -594,7 +602,12 @@ function renderIonLbs(): void {
           id: 'vol',
           value: 2000,
           min: '0',
-          unit: 'Bbls/Day',
+          unitOptions: [
+            { value: 'Bbls', label: 'Bbls/Day' },
+            { value: 'm3', label: 'm³/Day' },
+          ],
+          unitId: 'vol-unit',
+          unitValue: 'Bbls',
           solveKey: 'vol',
         })}
         ${field('Ion mass rate', {
@@ -610,17 +623,20 @@ function renderIonLbs(): void {
     true,
   )
   wireBack()
-  wireSolveForm('lbs', ['mgL', 'vol', 'lbs'], (solveFor) => {
+  wireSolveForm('lbs', ['mgL', 'vol', 'lbs', 'vol-unit'], (solveFor) => {
     const mgLEl = app.querySelector<HTMLInputElement>('#mgL')!
     const volEl = app.querySelector<HTMLInputElement>('#vol')!
     const lbsEl = app.querySelector<HTMLInputElement>('#lbs')!
+    const volUnit = (app.querySelector('#vol-unit') as HTMLSelectElement)
+      .value as VolUnit
+    const bblsPerDay = toBbls(num(volEl), volUnit)
 
     if (solveFor === 'lbs') {
-      setNum(lbsEl, ionLbsPerDay(num(mgLEl), num(volEl)))
+      setNum(lbsEl, ionLbsPerDay(num(mgLEl), bblsPerDay))
     } else if (solveFor === 'mgL') {
-      setNum(mgLEl, ionMgLFromLbs(num(lbsEl), num(volEl)))
+      setNum(mgLEl, ionMgLFromLbs(num(lbsEl), bblsPerDay))
     } else {
-      setNum(volEl, ionVolumeFromLbs(num(lbsEl), num(mgLEl)))
+      setNum(volEl, fromBbls(ionVolumeFromLbs(num(lbsEl), num(mgLEl)), volUnit))
     }
   })
 }
