@@ -83,13 +83,15 @@ function setNum(el: HTMLInputElement, value: number): void {
   el.value = formatResult(value) === '—' ? '' : formatResult(value)
 }
 
+type UnitOption = { value: string; label: string }
+
 type FieldOpts = {
   id: string
   value: number | string
   step?: string
   min?: string
   unit?: string
-  unitOptions?: { value: string; label: string }[]
+  unitOptions?: UnitOption[]
   unitId?: string
   unitValue?: string
   /** Variable key for solve-for; omit to hide checkbox. */
@@ -97,11 +99,22 @@ type FieldOpts = {
   solved?: boolean
 }
 
+/** Keep unit dropdowns alphanumeric by label for existing and future menus. */
+function sortUnitOptions(options: UnitOption[]): UnitOption[] {
+  const key = (label: string) => label.normalize('NFKD')
+  return [...options].sort((a, b) =>
+    key(a.label).localeCompare(key(b.label), undefined, {
+      numeric: true,
+      sensitivity: 'base',
+    }),
+  )
+}
+
 function field(label: string, opts: FieldOpts): string {
   let unitHtml = ''
   if (opts.unitOptions && opts.unitId) {
     unitHtml = `<select id="${opts.unitId}" aria-label="${label} units">
-          ${opts.unitOptions
+          ${sortUnitOptions(opts.unitOptions)
             .map(
               (u) =>
                 `<option value="${u.value}"${u.value === opts.unitValue ? ' selected' : ''}>${u.label}</option>`,
@@ -273,10 +286,10 @@ function renderDosage(): void {
             { value: 'Gals/Day', label: 'Gals/Day' },
             { value: 'Gals/Hr', label: 'Gals/Hr' },
             { value: 'Gals/Min', label: 'Gals/Min' },
-            { value: 'Qrts/Day', label: 'Qrts/Day' },
-            { value: 'Qrts/Hr', label: 'Qrts/Hr' },
             { value: 'L/Day', label: 'L/Day' },
             { value: 'L/Hr', label: 'L/Hr' },
+            { value: 'Qrts/Day', label: 'Qrts/Day' },
+            { value: 'Qrts/Hr', label: 'Qrts/Hr' },
           ],
           unitId: 'rate-unit',
           unitValue: 'Gals/Day',
@@ -337,8 +350,8 @@ function renderDisplacement(): void {
           min: '0',
           unitOptions: [
             { value: 'ft', label: 'ft' },
-            { value: 'miles', label: 'miles' },
             { value: 'km', label: 'km' },
+            { value: 'miles', label: 'miles' },
           ],
           unitId: 'len-unit',
           unitValue: 'ft',
@@ -350,8 +363,8 @@ function renderDisplacement(): void {
           min: '0',
           unitOptions: [
             { value: 'Bbls', label: 'Bbls' },
-            { value: 'm3', label: 'm³' },
             { value: 'Gals', label: 'Gals' },
+            { value: 'm3', label: 'm³' },
           ],
           unitId: 'vol-unit',
           unitValue: 'Bbls',
