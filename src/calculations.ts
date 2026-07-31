@@ -6,10 +6,10 @@ export type RateUnit =
   | 'Gals/Day'
   | 'Gals/Hr'
   | 'Gals/Min'
+  | 'Qrts/Day'
+  | 'Qrts/Hr'
   | 'L/Day'
   | 'L/Hr'
-  | 'Qts/Day'
-  | 'Qts/Hr'
 
 /** US liquid gallon → liters. */
 const LITERS_PER_GAL = 3.785411784
@@ -190,20 +190,20 @@ export function fromMcfd(mcfd: number, unit: GasRateUnit): number {
 export function rateToGalsPerDay(value: number, unit: RateUnit): number {
   if (unit === 'Gals/Hr') return value * 24
   if (unit === 'Gals/Min') return value * 1440
+  if (unit === 'Qrts/Day') return value / QTS_PER_GAL
+  if (unit === 'Qrts/Hr') return (value * 24) / QTS_PER_GAL
   if (unit === 'L/Day') return value / LITERS_PER_GAL
   if (unit === 'L/Hr') return (value * 24) / LITERS_PER_GAL
-  if (unit === 'Qts/Day') return value / QTS_PER_GAL
-  if (unit === 'Qts/Hr') return (value * 24) / QTS_PER_GAL
   return value
 }
 
 export function galsPerDayToRate(gpd: number, unit: RateUnit): number {
   if (unit === 'Gals/Hr') return gpd / 24
   if (unit === 'Gals/Min') return gpd / 1440
+  if (unit === 'Qrts/Day') return gpd * QTS_PER_GAL
+  if (unit === 'Qrts/Hr') return (gpd * QTS_PER_GAL) / 24
   if (unit === 'L/Day') return gpd * LITERS_PER_GAL
   if (unit === 'L/Hr') return (gpd * LITERS_PER_GAL) / 24
-  if (unit === 'Qts/Day') return gpd * QTS_PER_GAL
-  if (unit === 'Qts/Hr') return (gpd * QTS_PER_GAL) / 24
   return gpd
 }
 
