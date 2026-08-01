@@ -36,6 +36,12 @@ import {
   type VelUnit,
   type GasRateUnit,
 } from './calculations'
+import {
+  runFullCalculation,
+  bblPerDayToFt3PerS,
+  mcfdToFt3PerS,
+  type WellInputs,
+} from './multiphase'
 
 type CalcId =
   | 'home'
@@ -45,6 +51,7 @@ type CalcId =
   | 'gas-velocity'
   | 'ion-lbs'
   | 'erosional-velocity'
+  | 'multiphase'
 
 const CALCS: { id: Exclude<CalcId, 'home'>; title: string; blurb: string }[] = [
   {
@@ -76,6 +83,11 @@ const CALCS: { id: Exclude<CalcId, 'home'>; title: string; blurb: string }[] = [
     id: 'erosional-velocity',
     title: 'Erosional Velocity (API RP 14E)',
     blurb: 'Two-phase mixture density and erosional velocity limit',
+  },
+  {
+    id: 'multiphase',
+    title: 'Vertical Multiphase Flow',
+    blurb: 'Regime, entrainment, film, and wall shear for NORSOK M-506',
   },
 ]
 
@@ -166,6 +178,25 @@ function field(label: string, opts: FieldOpts): string {
       </span>
     </div>
   `
+}
+
+/** Read-only text output (regime labels, yes/no flags). */
+function textOut(label: string, id: string, unit?: string): string {
+  return `
+    <div class="field is-solved" data-field="${id}">
+      <div class="field-header">
+        <span class="field-label">${label}</span>
+      </div>
+      <span class="field-controls">
+        <input id="${id}" type="text" readonly tabindex="-1" value="" />
+        ${unit ? `<span class="unit-static">${unit}</span>` : ''}
+      </span>
+    </div>
+  `
+}
+
+function sectionTitle(title: string): string {
+  return `<p class="form-section-title">${title}</p>`
 }
 
 function shell(
@@ -840,6 +871,377 @@ function renderErosionalVelocity(): void {
   )
 }
 
+function renderMultiphase(): void {
+  app.innerHTML = shell(
+    'Vertical Multiphase Flow',
+    `
+      <form class="calc-form" id="form">
+        ${sectionTitle('Inputs')}
+        ${field('Tubing ID', {
+          id: 'tubing-id',
+          value: 3,
+          min: '0',
+          step: '0.01',
+          unit: 'in',
+        })}
+        ${field('Liquid rate', {
+          id: 'liq-rate',
+          value: 600,
+          min: '0',
+          unit: 'Bbls/Day',
+        })}
+        ${field('Gas rate (in-situ)', {
+          id: 'gas-rate',
+          value: 1.2,
+          min: '0',
+          step: '0.01',
+          unitOptions: [
+            { value: 'ft3/s', label: 'ft³/s' },
+            { value: 'MCFD', label: 'MCFD' },
+          ],
+          unitId: 'gas-rate-unit',
+          unitValue: 'ft3/s',
+        })}
+        ${field('Liquid density', {
+          id: 'rho-l',
+          value: 55,
+          min: '0',
+          unit: 'lbm/ft³',
+        })}
+        ${field('Gas density', {
+          id: 'rho-g',
+          value: 3,
+          min: '0',
+          step: '0.01',
+          unit: 'lbm/ft³',
+        })}
+        ${field('Interfacial tension', {
+          id: 'sigma',
+          value: 20,
+          min: '0',
+          unit: 'dyne/cm',
+        })}
+        ${field('Liquid viscosity', {
+          id: 'mu-l',
+          value: 1,
+          min: '0',
+          step: '0.01',
+          unit: 'cP',
+        })}
+        ${field('Gas viscosity', {
+          id: 'mu-g',
+          value: 0.015,
+          min: '0',
+          step: '0.001',
+          unit: 'cP',
+        })}
+        ${field('Pipe roughness', {
+          id: 'roughness',
+          value: 0.0018,
+          min: '0',
+          step: '0.0001',
+          unit: 'in',
+        })}
+        ${field('API 14E C factor', {
+          id: 'c-factor',
+          value: 100,
+          min: '0',
+          unit: 'C',
+        })}
+
+        ${sectionTitle('Regime')}
+        ${textOut('Flow regime', 'regime')}
+        ${field('Vsl', {
+          id: 'vsl',
+          value: '',
+          unit: 'ft/s',
+          solved: true,
+        })}
+        ${field('Vsg', {
+          id: 'vsg',
+          value: '',
+          unit: 'ft/s',
+          solved: true,
+        })}
+        ${field('Vm', {
+          id: 'vm',
+          value: '',
+          unit: 'ft/s',
+          solved: true,
+        })}
+        ${field('Bubble → slug Vsg', {
+          id: 'vsg-bub-slug',
+          value: '',
+          unit: 'ft/s',
+          solved: true,
+        })}
+        ${field('Slug → annular Vsg', {
+          id: 'vsg-slug-ann',
+          value: '',
+          unit: 'ft/s',
+          solved: true,
+        })}
+        ${field('Kutateladze Ku_G', {
+          id: 'ku',
+          value: '',
+          unit: '—',
+          solved: true,
+        })}
+
+        ${sectionTitle('Holdup / Density')}
+        ${field('Void fraction', {
+          id: 'void',
+          value: '',
+          unit: '—',
+          solved: true,
+        })}
+        ${field('Liquid holdup', {
+          id: 'holdup',
+          value: '',
+          unit: '—',
+          solved: true,
+        })}
+        ${field('Mixture density (slip)', {
+          id: 'rho-slip',
+          value: '',
+          unit: 'lbm/ft³',
+          solved: true,
+        })}
+
+        ${sectionTitle('API RP 14E Screen')}
+        ${field('Erosional velocity', {
+          id: 've',
+          value: '',
+          unit: 'ft/s',
+          solved: true,
+        })}
+        ${textOut('Below erosional limit', 'erosional-ok')}
+
+        ${sectionTitle('Annular Film / Shear')}
+        ${field('Entrainment fraction E', {
+          id: 'entrainment',
+          value: '',
+          unit: '—',
+          solved: true,
+        })}
+        ${field('Film Reynolds number', {
+          id: 're-film',
+          value: '',
+          unit: '—',
+          solved: true,
+        })}
+        ${textOut('Film regime', 'film-regime')}
+        ${field('Film thickness', {
+          id: 'delta',
+          value: '',
+          unit: 'in',
+          solved: true,
+        })}
+        ${field('Interfacial shear τᵢ', {
+          id: 'tau-i',
+          value: '',
+          unit: 'Pa',
+          solved: true,
+        })}
+        ${field('Wall shear τ_w (annular)', {
+          id: 'tau-w',
+          value: '',
+          unit: 'Pa',
+          solved: true,
+        })}
+
+        ${sectionTitle('NORSOK M-506')}
+        ${field('Wall shear τ_w (NORSOK)', {
+          id: 'tau-norsok',
+          value: '',
+          unit: 'Pa',
+          solved: true,
+        })}
+        ${field('τ_w / 19 Pa', {
+          id: 'norsok-ratio',
+          value: '',
+          unit: '—',
+          solved: true,
+        })}
+      </form>
+    `,
+    true,
+    'Vertical upflow — regime, entrainment, film, and wall shear for CO₂ corrosion',
+  )
+  wireBack()
+
+  const clearAnnular = () => {
+    for (const id of [
+      'entrainment',
+      're-film',
+      'delta',
+      'tau-i',
+      'tau-w',
+    ]) {
+      const el = app.querySelector<HTMLInputElement>(`#${id}`)
+      if (el) el.value = ''
+    }
+    const filmRegime = app.querySelector<HTMLInputElement>('#film-regime')
+    if (filmRegime) filmRegime.value = '—'
+  }
+
+  wireLiveForm(
+    [
+      'tubing-id',
+      'liq-rate',
+      'gas-rate',
+      'gas-rate-unit',
+      'rho-l',
+      'rho-g',
+      'sigma',
+      'mu-l',
+      'mu-g',
+      'roughness',
+      'c-factor',
+    ],
+    () => {
+      const tubingIdIn = num(app.querySelector<HTMLInputElement>('#tubing-id')!)
+      const liqBblDay = num(app.querySelector<HTMLInputElement>('#liq-rate')!)
+      const gasRaw = num(app.querySelector<HTMLInputElement>('#gas-rate')!)
+      const gasUnit = (
+        app.querySelector('#gas-rate-unit') as HTMLSelectElement
+      ).value
+      const gasRateFt3PerS =
+        gasUnit === 'MCFD' ? mcfdToFt3PerS(gasRaw) : gasRaw
+
+      const inputs: WellInputs = {
+        tubingIdIn,
+        liquidRateFt3PerS: bblPerDayToFt3PerS(liqBblDay),
+        gasRateFt3PerS,
+        liquidDensityLbmFt3: num(app.querySelector<HTMLInputElement>('#rho-l')!),
+        gasDensityLbmFt3: num(app.querySelector<HTMLInputElement>('#rho-g')!),
+        interfacialTensionDyneCm: num(
+          app.querySelector<HTMLInputElement>('#sigma')!,
+        ),
+        liquidViscosityCp: num(app.querySelector<HTMLInputElement>('#mu-l')!),
+        gasViscosityCp: num(app.querySelector<HTMLInputElement>('#mu-g')!),
+        pipeRoughnessIn: num(
+          app.querySelector<HTMLInputElement>('#roughness')!,
+        ),
+      }
+      const cFactor = num(app.querySelector<HTMLInputElement>('#c-factor')!)
+
+      const setText = (id: string, value: string) => {
+        const el = app.querySelector<HTMLInputElement>(`#${id}`)
+        if (el) el.value = value
+      }
+      const clearNum = (id: string) => {
+        const el = app.querySelector<HTMLInputElement>(`#${id}`)
+        if (el) el.value = ''
+      }
+
+      try {
+        const result = runFullCalculation(inputs, {
+          erosionalCFactor: cFactor,
+        })
+        const { regime, holdup, erosional, norsokWallShear } = result
+
+        setText('regime', regime.regime)
+        setNum(app.querySelector<HTMLInputElement>('#vsl')!, regime.Vsl)
+        setNum(app.querySelector<HTMLInputElement>('#vsg')!, regime.Vsg)
+        setNum(app.querySelector<HTMLInputElement>('#vm')!, regime.Vm)
+        setNum(
+          app.querySelector<HTMLInputElement>('#vsg-bub-slug')!,
+          regime.bubbleToSlugTransitionVsgFtPerS,
+        )
+        setNum(
+          app.querySelector<HTMLInputElement>('#vsg-slug-ann')!,
+          regime.slugChurnToAnnularTransitionVsgFtPerS,
+        )
+        setNum(app.querySelector<HTMLInputElement>('#ku')!, regime.kutateladzeNumber)
+
+        setNum(app.querySelector<HTMLInputElement>('#void')!, holdup.voidFraction)
+        setNum(
+          app.querySelector<HTMLInputElement>('#holdup')!,
+          holdup.liquidHoldup,
+        )
+        setNum(
+          app.querySelector<HTMLInputElement>('#rho-slip')!,
+          holdup.mixtureDensitySlipLbmFt3,
+        )
+
+        setNum(
+          app.querySelector<HTMLInputElement>('#ve')!,
+          erosional.erosionalVelocityFtPerS,
+        )
+        setText(
+          'erosional-ok',
+          erosional.belowErosionalLimit ? 'Yes' : 'No — above limit',
+        )
+
+        setNum(
+          app.querySelector<HTMLInputElement>('#tau-norsok')!,
+          norsokWallShear.wallShearStressPa,
+        )
+        setNum(
+          app.querySelector<HTMLInputElement>('#norsok-ratio')!,
+          norsokWallShear.wallShearStressPa / 19,
+        )
+
+        if (
+          result.entrainment &&
+          result.film &&
+          result.shear &&
+          result.filmThickness
+        ) {
+          setNum(
+            app.querySelector<HTMLInputElement>('#entrainment')!,
+            result.entrainment.entrainmentFraction,
+          )
+          setNum(
+            app.querySelector<HTMLInputElement>('#re-film')!,
+            result.film.filmReynoldsNumber,
+          )
+          setText(
+            'film-regime',
+            result.film.filmRegimeLaminar ? 'Laminar' : 'Turbulent',
+          )
+          setNum(
+            app.querySelector<HTMLInputElement>('#delta')!,
+            result.filmThickness.filmThicknessIn,
+          )
+          setNum(
+            app.querySelector<HTMLInputElement>('#tau-i')!,
+            result.shear.interfacialShearPa,
+          )
+          setNum(
+            app.querySelector<HTMLInputElement>('#tau-w')!,
+            result.shear.wallShearStressPa,
+          )
+        } else {
+          clearAnnular()
+        }
+      } catch {
+        setText('regime', '')
+        setText('erosional-ok', '')
+        setText('film-regime', '')
+        for (const id of [
+          'vsl',
+          'vsg',
+          'vm',
+          'vsg-bub-slug',
+          'vsg-slug-ann',
+          'ku',
+          'void',
+          'holdup',
+          'rho-slip',
+          've',
+          'tau-norsok',
+          'norsok-ratio',
+        ]) {
+          clearNum(id)
+        }
+        clearAnnular()
+      }
+    },
+  )
+}
+
 function navigate(id: CalcId): void {
   history.replaceState(null, '', id === 'home' ? '#' : `#${id}`)
   switch (id) {
@@ -860,6 +1262,9 @@ function navigate(id: CalcId): void {
       break
     case 'erosional-velocity':
       renderErosionalVelocity()
+      break
+    case 'multiphase':
+      renderMultiphase()
       break
     default:
       renderHome()

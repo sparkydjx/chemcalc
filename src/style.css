@@ -214,6 +214,7 @@ body {
 }
 
 input[type='number'],
+input[type='text'],
 select {
   width: 100%;
   min-height: 2.75rem;
@@ -227,13 +228,15 @@ select {
 }
 
 input[type='number']:focus,
+input[type='text']:focus,
 select:focus {
   outline: 2px solid var(--accent);
   outline-offset: 1px;
   background: #fff;
 }
 
-input[type='number'][readonly] {
+input[type='number'][readonly],
+input[type='text'][readonly] {
   border-color: transparent;
   background: transparent;
   font-size: clamp(1.35rem, 5vw, 1.75rem);
@@ -243,13 +246,36 @@ input[type='number'][readonly] {
   cursor: default;
 }
 
-input[type='number'][readonly]:focus {
+input[type='number'][readonly]:focus,
+input[type='text'][readonly]:focus {
   outline: none;
   background: transparent;
 }
 
+input[type='text'][readonly] {
+  font-size: clamp(1.1rem, 4vw, 1.35rem);
+  text-transform: capitalize;
+}
+
 .field.is-solved {
   background: var(--accent-soft);
+}
+
+.form-section-title {
+  margin: 0.55rem 0 0;
+  padding: 0.35rem 0 0;
+  border-top: 1px solid var(--line);
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--accent);
+}
+
+.form-section-title:first-child {
+  margin-top: 0;
+  padding-top: 0;
+  border-top: none;
 }
 
 .field.is-solved .field-label,
