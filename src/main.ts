@@ -16,6 +16,7 @@ import {
   ionLbsPerDay,
   ionMgLFromLbs,
   ionVolumeFromLbs,
+  calculateApiRp14E,
   toInches,
   fromInches,
   toFeet,
@@ -43,6 +44,7 @@ type CalcId =
   | 'liquid-velocity'
   | 'gas-velocity'
   | 'ion-lbs'
+  | 'erosional-velocity'
 
 const CALCS: { id: Exclude<CalcId, 'home'>; title: string; blurb: string }[] = [
   {
@@ -69,6 +71,11 @@ const CALCS: { id: Exclude<CalcId, 'home'>; title: string; blurb: string }[] = [
     id: 'ion-lbs',
     title: 'mg/L to Lbs/Day',
     blurb: 'Concentration, volume, and lbs/day — solve for any',
+  },
+  {
+    id: 'erosional-velocity',
+    title: 'Erosional Velocity (API RP 14E)',
+    blurb: 'Two-phase mixture density and erosional velocity limit',
   },
 ]
 
@@ -161,14 +168,19 @@ function field(label: string, opts: FieldOpts): string {
   `
 }
 
-function shell(title: string, body: string, showBack: boolean): string {
+function shell(
+  title: string,
+  body: string,
+  showBack: boolean,
+  hint = 'Check <strong>Solve</strong> next to the variable you want to find',
+): string {
   return `
     <main class="shell">
       <header class="brand">
         ${showBack ? `<button type="button" class="back" id="back" aria-label="Back to calculators">←</button>` : ''}
         <div class="brand-text">
           <h1>${showBack ? title : 'ChemCalc'}</h1>
-          ${showBack ? '<p class="hint">Check <strong>Solve</strong> next to the variable you want to find</p>' : '<p>Oilfield chemistry &amp; line calculations</p>'}
+          ${showBack ? `<p class="hint">${hint}</p>` : '<p>Oilfield chemistry &amp; line calculations</p>'}
         </div>
       </header>
       <section class="workspace" aria-label="${title}">
@@ -658,6 +670,176 @@ function renderIonLbs(): void {
   })
 }
 
+/** Live recalculation for forward-only (no solve-for) forms. */
+function wireLiveForm(inputIds: string[], compute: () => void): void {
+  for (const id of inputIds) {
+    const el = app.querySelector(`#${id}`)
+    el?.addEventListener('input', compute)
+    el?.addEventListener('change', compute)
+  }
+  compute()
+}
+
+function renderErosionalVelocity(): void {
+  app.innerHTML = shell(
+    'Erosional Velocity',
+    `
+      <form class="calc-form" id="form">
+        ${field('Liquid specific gravity', {
+          id: 'sL',
+          value: 0.85,
+          min: '0',
+          step: '0.01',
+          unit: 'water = 1',
+        })}
+        ${field('Liquid rate', {
+          id: 'qL',
+          value: 5000,
+          min: '0',
+          unit: 'Bbls/Day',
+        })}
+        ${field('Gas specific gravity', {
+          id: 'sG',
+          value: 0.65,
+          min: '0',
+          step: '0.01',
+          unit: 'air = 1',
+        })}
+        ${field('Gas rate', {
+          id: 'qG',
+          value: 2,
+          min: '0',
+          step: '0.01',
+          unitOptions: [
+            { value: 'MMCFD', label: 'MMCFD' },
+            { value: 'MCFD', label: 'MCFD' },
+            { value: 'M3/Day', label: 'm³/Day' },
+          ],
+          unitId: 'qG-unit',
+          unitValue: 'MMCFD',
+        })}
+        ${field('Pressure', {
+          id: 'psia',
+          value: 1000,
+          min: '0',
+          unit: 'psia',
+        })}
+        ${field('Temperature', {
+          id: 'tempF',
+          value: 60,
+          unit: '°F',
+        })}
+        ${field('Gas compressibility Z', {
+          id: 'z',
+          value: 1,
+          min: '0',
+          step: '0.01',
+          unit: '—',
+        })}
+        <div class="field" data-field="c-preset">
+          <div class="field-header">
+            <span class="field-label">Service condition</span>
+          </div>
+          <span class="field-controls">
+            <select id="c-preset" aria-label="Service condition">
+              <option value="100" selected>Continuous solids-free (C = 100)</option>
+              <option value="125">Intermittent solids-free (C = 125)</option>
+              <option value="150">Continuous clean (C = 150)</option>
+              <option value="200">Continuous clean (C = 200)</option>
+              <option value="250">Intermittent clean (C = 250)</option>
+            </select>
+          </span>
+        </div>
+        ${field('C factor', {
+          id: 'c',
+          value: 100,
+          min: '0',
+          unit: 'C',
+        })}
+        ${field('Gas/liquid ratio', {
+          id: 'glr',
+          value: '',
+          unit: 'scf/bbl',
+          solved: true,
+        })}
+        ${field('Mixture density', {
+          id: 'density',
+          value: '',
+          unit: 'lb/ft³',
+          solved: true,
+        })}
+        ${field('Erosional velocity', {
+          id: 've',
+          value: '',
+          unitOptions: [
+            { value: 'ft/sec', label: 'ft/sec' },
+            { value: 'm/sec', label: 'm/sec' },
+          ],
+          unitId: 've-unit',
+          unitValue: 'ft/sec',
+          solved: true,
+        })}
+      </form>
+    `,
+    true,
+    'API RP 14E two-phase limit — enter conditions to compute V<sub>e</sub>',
+  )
+  wireBack()
+
+  const cEl = app.querySelector<HTMLInputElement>('#c')!
+  const cPreset = app.querySelector<HTMLSelectElement>('#c-preset')!
+
+  cPreset.addEventListener('change', () => {
+    cEl.value = cPreset.value
+    cEl.dispatchEvent(new Event('input', { bubbles: true }))
+  })
+
+  wireLiveForm(
+    ['sL', 'qL', 'sG', 'qG', 'qG-unit', 'psia', 'tempF', 'z', 'c', 've-unit'],
+    () => {
+      const sL = num(app.querySelector<HTMLInputElement>('#sL')!)
+      const qL = num(app.querySelector<HTMLInputElement>('#qL')!)
+      const sG = num(app.querySelector<HTMLInputElement>('#sG')!)
+      const qGEl = app.querySelector<HTMLInputElement>('#qG')!
+      const psia = num(app.querySelector<HTMLInputElement>('#psia')!)
+      const tempF = num(app.querySelector<HTMLInputElement>('#tempF')!)
+      const z = num(app.querySelector<HTMLInputElement>('#z')!)
+      const c = num(cEl)
+      const qGUnit = (app.querySelector('#qG-unit') as HTMLSelectElement)
+        .value as GasRateUnit
+      const veUnit = (app.querySelector('#ve-unit') as HTMLSelectElement)
+        .value as VelUnit
+
+      const glrEl = app.querySelector<HTMLInputElement>('#glr')!
+      const densityEl = app.querySelector<HTMLInputElement>('#density')!
+      const veEl = app.querySelector<HTMLInputElement>('#ve')!
+
+      try {
+        const qGMmscfd = toMcfd(num(qGEl), qGUnit) / 1000
+        const result = calculateApiRp14E(
+          {
+            liquidSpecificGravity: sL,
+            liquidFlowRateBblPerDay: qL,
+            gasSpecificGravity: sG,
+            gasFlowRateMMscfd: qGMmscfd,
+            pressurePsia: psia,
+            temperatureRankine: tempF + 460,
+            gasCompressibilityZ: z,
+          },
+          c,
+        )
+        setNum(glrEl, result.gasLiquidRatioScfPerBbl)
+        setNum(densityEl, result.mixtureDensityLbPerFt3)
+        setNum(veEl, fromFps(result.erosionalVelocityFtPerSec, veUnit))
+      } catch {
+        glrEl.value = ''
+        densityEl.value = ''
+        veEl.value = ''
+      }
+    },
+  )
+}
+
 function navigate(id: CalcId): void {
   history.replaceState(null, '', id === 'home' ? '#' : `#${id}`)
   switch (id) {
@@ -675,6 +857,9 @@ function navigate(id: CalcId): void {
       break
     case 'ion-lbs':
       renderIonLbs()
+      break
+    case 'erosional-velocity':
+      renderErosionalVelocity()
       break
     default:
       renderHome()

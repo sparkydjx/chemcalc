@@ -215,3 +215,109 @@ export function formatResult(n: number, digits = 4): string {
   const rounded = Number(n.toFixed(digits))
   return String(rounded)
 }
+
+// --- API RP 14E erosional velocity (imperial / oilfield units) ---
+
+export interface MixtureDensityInputs {
+  /** Liquid specific gravity (water = 1.0); use average for oil–water mixtures */
+  liquidSpecificGravity: number
+  /** Liquid flow rate, bbl/day */
+  liquidFlowRateBblPerDay: number
+  /** Gas specific gravity (air = 1.0) */
+  gasSpecificGravity: number
+  /** Gas flow rate, MMscfd */
+  gasFlowRateMMscfd: number
+  /** Operating pressure, psia */
+  pressurePsia: number
+  /** Operating temperature, °R (°F + 460) */
+  temperatureRankine: number
+  /** Gas compressibility factor Z (dimensionless) */
+  gasCompressibilityZ: number
+}
+
+export interface ErosionalVelocityResult {
+  gasLiquidRatioScfPerBbl: number
+  mixtureDensityLbPerFt3: number
+  erosionalVelocityFtPerSec: number
+}
+
+/** Empirical C constants per API RP 14E (solids-free service) */
+export const C_CONSTANTS = {
+  continuousSolidsFree: 100,
+  intermittentSolidsFree: 125,
+  continuousCleanNonCorrosive: 150, // typically 150–200
+  intermittentCleanNonCorrosive: 250,
+} as const
+
+/**
+ * Gas/liquid mixture density per API RP 14E Eq. 2.15 (lb/ft³).
+ * R is formed from gas and liquid rates: R = (Q_g × 1e6) / Q_l (scf/bbl).
+ */
+export function calculateMixtureDensity(inputs: MixtureDensityInputs): number {
+  const {
+    liquidSpecificGravity: sL,
+    liquidFlowRateBblPerDay: qL,
+    gasSpecificGravity: sG,
+    gasFlowRateMMscfd: qG,
+    pressurePsia: p,
+    temperatureRankine: t,
+    gasCompressibilityZ: z,
+  } = inputs
+
+  if (qL <= 0) {
+    throw new Error('Liquid rate must be positive to form gas/liquid ratio.')
+  }
+  if (p <= 0) {
+    throw new Error('Pressure must be positive (psia).')
+  }
+  if (t <= 0) {
+    throw new Error('Temperature must be positive (°R).')
+  }
+  if (z <= 0) {
+    throw new Error('Gas compressibility Z must be positive.')
+  }
+
+  const r = (qG * 1_000_000) / qL
+  const numerator = 12409 * sL * p + 2.7 * r * sG * p
+  const denominator = 198.7 * p + r * t * z
+
+  if (denominator === 0) {
+    throw new Error('Denominator is zero — check flow rate and condition inputs.')
+  }
+
+  return numerator / denominator
+}
+
+/** API RP 14E erosional velocity limit (ft/s): V_e = C / √ρ_m */
+export function calculateErosionalVelocity(
+  mixtureDensityLbPerFt3: number,
+  c: number,
+): number {
+  if (mixtureDensityLbPerFt3 <= 0) {
+    throw new Error('Mixture density must be positive.')
+  }
+  if (c <= 0) {
+    throw new Error('C factor must be positive.')
+  }
+  return c / Math.sqrt(mixtureDensityLbPerFt3)
+}
+
+/** Mixture density and erosional velocity in one call. */
+export function calculateApiRp14E(
+  inputs: MixtureDensityInputs,
+  c: number,
+): ErosionalVelocityResult {
+  const gasLiquidRatioScfPerBbl =
+    (inputs.gasFlowRateMMscfd * 1_000_000) / inputs.liquidFlowRateBblPerDay
+  const mixtureDensityLbPerFt3 = calculateMixtureDensity(inputs)
+  const erosionalVelocityFtPerSec = calculateErosionalVelocity(
+    mixtureDensityLbPerFt3,
+    c,
+  )
+
+  return {
+    gasLiquidRatioScfPerBbl,
+    mixtureDensityLbPerFt3,
+    erosionalVelocityFtPerSec,
+  }
+}
