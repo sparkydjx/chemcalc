@@ -16,6 +16,7 @@ import {
   ionLbsPerDay,
   ionMgLFromLbs,
   ionVolumeFromLbs,
+  scavengerEfficiency,
   calculateApiRp14E,
   toInches,
   fromInches,
@@ -52,6 +53,7 @@ type CalcId =
   | 'liquid-velocity'
   | 'gas-velocity'
   | 'ion-lbs'
+  | 'scavenger-efficiency'
   | 'erosional-velocity'
   | 'multiphase'
 
@@ -80,6 +82,11 @@ const CALCS: { id: Exclude<CalcId, 'home'>; title: string; blurb: string }[] = [
     id: 'ion-lbs',
     title: 'mg/L to Lbs/Day',
     blurb: 'Concentration, volume, and lbs/day — solve for any',
+  },
+  {
+    id: 'scavenger-efficiency',
+    title: 'Scavenger Efficiency',
+    blurb: 'H₂S load, scavenger properties, and % efficiency',
   },
   {
     id: 'erosional-velocity',
@@ -757,6 +764,98 @@ function wireLiveForm(inputIds: string[], compute: () => void): void {
   compute()
 }
 
+function renderScavengerEfficiency(): void {
+  app.innerHTML = shell(
+    'Scavenger Efficiency',
+    `
+      <form class="calc-form" id="form">
+        ${field('H₂S concentration', {
+          id: 'h2s',
+          value: 160,
+          min: '0',
+          unit: 'ppm',
+        })}
+        ${field('Gas rate', {
+          id: 'gas',
+          value: 2500,
+          min: '0',
+          unitOptions: [
+            { value: 'MCFD', label: 'MCFD' },
+            { value: 'MMCFD', label: 'MMCFD' },
+            { value: 'M3/Day', label: 'm³/Day' },
+          ],
+          unitId: 'gas-unit',
+          unitValue: 'MCFD',
+        })}
+        ${field('Scavenger density', {
+          id: 'density',
+          value: 8.5,
+          min: '0',
+          step: '0.01',
+          unit: 'lb/gal',
+        })}
+        ${field('Scavenger activity', {
+          id: 'activity',
+          value: 40,
+          min: '0',
+          unit: '%',
+        })}
+        ${field('Injection rate', {
+          id: 'inject',
+          value: 50,
+          min: '0',
+          unitOptions: [
+            { value: 'Gals/Day', label: 'Gals/Day' },
+            { value: 'Gals/Hr', label: 'Gals/Hr' },
+            { value: 'Gals/Min', label: 'Gals/Min' },
+            { value: 'Qrts/Day', label: 'Qrts/Day' },
+            { value: 'Qrts/Hr', label: 'Qrts/Hr' },
+            { value: 'L/Day', label: 'L/Day' },
+            { value: 'L/Hr', label: 'L/Hr' },
+          ],
+          unitId: 'inject-unit',
+          unitValue: 'Gals/Day',
+        })}
+        ${field('Scavenger efficiency', {
+          id: 'efficiency',
+          value: '',
+          unit: '%',
+          solved: true,
+        })}
+      </form>
+    `,
+    true,
+    'Enter H₂S load and scavenger properties to compute % efficiency',
+  )
+  wireBack()
+  wireLiveForm(
+    ['h2s', 'gas', 'gas-unit', 'density', 'activity', 'inject', 'inject-unit'],
+    () => {
+      const h2s = num(app.querySelector<HTMLInputElement>('#h2s')!)
+      const gasEl = app.querySelector<HTMLInputElement>('#gas')!
+      const density = num(app.querySelector<HTMLInputElement>('#density')!)
+      const activity = num(app.querySelector<HTMLInputElement>('#activity')!)
+      const injectEl = app.querySelector<HTMLInputElement>('#inject')!
+      const efficiencyEl = app.querySelector<HTMLInputElement>('#efficiency')!
+      const gasUnit = (app.querySelector('#gas-unit') as HTMLSelectElement)
+        .value as GasRateUnit
+      const injectUnit = (app.querySelector('#inject-unit') as HTMLSelectElement)
+        .value as RateUnit
+
+      try {
+        const mcfd = toMcfd(num(gasEl), gasUnit)
+        const galDay = rateToGalsPerDay(num(injectEl), injectUnit)
+        setNum(
+          efficiencyEl,
+          scavengerEfficiency(h2s, mcfd, density, activity, galDay),
+        )
+      } catch {
+        efficiencyEl.value = ''
+      }
+    },
+  )
+}
+
 function renderErosionalVelocity(): void {
   app.innerHTML = shell(
     'Erosional Velocity',
@@ -1416,6 +1515,9 @@ function navigate(id: CalcId): void {
       break
     case 'ion-lbs':
       renderIonLbs()
+      break
+    case 'scavenger-efficiency':
+      renderScavengerEfficiency()
       break
     case 'erosional-velocity':
       renderErosionalVelocity()
