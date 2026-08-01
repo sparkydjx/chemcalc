@@ -158,6 +158,32 @@ export function scavengerEfficiency(
   return Math.round(efficiency * 100) / 100
 }
 
+/**
+ * Injection rate (gal/day) for a target % scavenger efficiency.
+ *
+ * (0.0002888177 × ppm H₂S × MCFD)
+ *   ÷ (density lb/gal × (activity % ÷ 100) × (efficiency % ÷ 100))
+ */
+export function scavengerInjectionRate(
+  h2sPpm: number,
+  gasRateMcfd: number,
+  scavengerDensityLbGal: number,
+  scavengerActivityPct: number,
+  efficiencyPct: number,
+): number {
+  const numerator = 0.0002888177 * h2sPpm * gasRateMcfd
+  const denominator =
+    scavengerDensityLbGal *
+    (scavengerActivityPct / 100) *
+    (efficiencyPct / 100)
+
+  if (denominator === 0) {
+    throw new Error('Denominator cannot be zero')
+  }
+
+  return numerator / denominator
+}
+
 // --- unit helpers (convert UI units → formula base units / results) ---
 
 export function toInches(value: number, unit: DiaUnit): number {
