@@ -17,6 +17,7 @@ import {
   ionMgLFromLbs,
   ionVolumeFromLbs,
   scavengerEfficiency,
+  scavengerInjectionRate,
   calculateApiRp14E,
   toInches,
   fromInches,
@@ -29,6 +30,7 @@ import {
   toMcfd,
   fromMcfd,
   rateToGalsPerDay,
+  galsPerDayToRate,
   formatResult,
   type RateUnit,
   type DiaUnit,
@@ -86,7 +88,7 @@ const CALCS: { id: Exclude<CalcId, 'home'>; title: string; blurb: string }[] = [
   {
     id: 'scavenger-efficiency',
     title: 'Scavenger Efficiency',
-    blurb: 'H₂S load, scavenger properties, and % efficiency',
+    blurb: 'Injection rate or % efficiency — solve for either',
   },
   {
     id: 'erosional-velocity',
@@ -815,22 +817,34 @@ function renderScavengerEfficiency(): void {
           ],
           unitId: 'inject-unit',
           unitValue: 'Gals/Day',
+          solveKey: 'inject',
         })}
         ${field('Scavenger efficiency', {
           id: 'efficiency',
           value: '',
+          min: '0',
           unit: '%',
+          solveKey: 'efficiency',
           solved: true,
         })}
       </form>
     `,
     true,
-    'Enter H₂S load and scavenger properties to compute % efficiency',
   )
   wireBack()
-  wireLiveForm(
-    ['h2s', 'gas', 'gas-unit', 'density', 'activity', 'inject', 'inject-unit'],
-    () => {
+  wireSolveForm(
+    'efficiency',
+    [
+      'h2s',
+      'gas',
+      'gas-unit',
+      'density',
+      'activity',
+      'inject',
+      'inject-unit',
+      'efficiency',
+    ],
+    (solveFor) => {
       const h2s = num(app.querySelector<HTMLInputElement>('#h2s')!)
       const gasEl = app.querySelector<HTMLInputElement>('#gas')!
       const density = num(app.querySelector<HTMLInputElement>('#density')!)
@@ -844,13 +858,25 @@ function renderScavengerEfficiency(): void {
 
       try {
         const mcfd = toMcfd(num(gasEl), gasUnit)
-        const galDay = rateToGalsPerDay(num(injectEl), injectUnit)
-        setNum(
-          efficiencyEl,
-          scavengerEfficiency(h2s, mcfd, density, activity, galDay),
-        )
+        if (solveFor === 'efficiency') {
+          const galDay = rateToGalsPerDay(num(injectEl), injectUnit)
+          setNum(
+            efficiencyEl,
+            scavengerEfficiency(h2s, mcfd, density, activity, galDay),
+          )
+        } else {
+          const galDay = scavengerInjectionRate(
+            h2s,
+            mcfd,
+            density,
+            activity,
+            num(efficiencyEl),
+          )
+          setNum(injectEl, galsPerDayToRate(galDay, injectUnit))
+        }
       } catch {
-        efficiencyEl.value = ''
+        if (solveFor === 'efficiency') efficiencyEl.value = ''
+        else injectEl.value = ''
       }
     },
   )
