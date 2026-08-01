@@ -131,6 +131,33 @@ export function ionVolumeFromLbs(lbsPerDay: number, ionMgL: number): number {
   return lbsPerDay / (ionMgL * 0.00035)
 }
 
+/**
+ * % scavenger efficiency from H₂S load and scavenger injection.
+ *
+ * ((0.0002888177 × ppm H₂S × MCFD)
+ *   ÷ (density lb/gal × (activity % ÷ 100) × gal/day)) × 100
+ */
+export function scavengerEfficiency(
+  h2sPpm: number,
+  gasRateMcfd: number,
+  scavengerDensityLbGal: number,
+  scavengerActivityPct: number,
+  injectionRateGalDay: number,
+): number {
+  const numerator = 0.0002888177 * h2sPpm * gasRateMcfd
+  const denominator =
+    scavengerDensityLbGal *
+    (scavengerActivityPct / 100) *
+    injectionRateGalDay
+
+  if (denominator === 0) {
+    throw new Error('Denominator cannot be zero')
+  }
+
+  const efficiency = (numerator / denominator) * 100
+  return Math.round(efficiency * 100) / 100
+}
+
 // --- unit helpers (convert UI units → formula base units / results) ---
 
 export function toInches(value: number, unit: DiaUnit): number {
