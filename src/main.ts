@@ -39,8 +39,10 @@ import {
 import {
   runFullCalculation,
   bblPerDayToFt3PerS,
-  mcfdToFt3PerS,
+  stdGasRateToFt3PerS,
+  stdToInSituGasRateFt3PerS,
   type WellInputs,
+  type StdGasRateUnit,
 } from './multiphase'
 
 type CalcId =
@@ -890,17 +892,42 @@ function renderMultiphase(): void {
           min: '0',
           unit: 'Bbls/Day',
         })}
-        ${field('Gas rate (in-situ)', {
+        ${field('Gas rate (standard)', {
           id: 'gas-rate',
-          value: 1.2,
+          value: 2,
           min: '0',
           step: '0.01',
           unitOptions: [
-            { value: 'ft3/s', label: 'ft³/s' },
+            { value: 'MMCFD', label: 'MMCFD' },
             { value: 'MCFD', label: 'MCFD' },
+            { value: 'ft3/s', label: 'ft³/s' },
           ],
           unitId: 'gas-rate-unit',
-          unitValue: 'ft3/s',
+          unitValue: 'MMCFD',
+        })}
+        ${field('Pressure', {
+          id: 'psia',
+          value: 1000,
+          min: '0',
+          unit: 'psia',
+        })}
+        ${field('Temperature', {
+          id: 'temp-f',
+          value: 150,
+          unit: '°F',
+        })}
+        ${field('Gas compressibility Z', {
+          id: 'z',
+          value: 0.9,
+          min: '0',
+          step: '0.01',
+          unit: '—',
+        })}
+        ${field('Gas rate (in-situ)', {
+          id: 'gas-insitu',
+          value: '',
+          unit: 'ft³/s',
+          solved: true,
         })}
         ${field('Liquid density', {
           id: 'rho-l',
@@ -1066,7 +1093,7 @@ function renderMultiphase(): void {
       </form>
     `,
     true,
-    'Vertical upflow — regime, entrainment, film, and wall shear for CO₂ corrosion',
+    'Enter standard gas rate + P, T, Z — in-situ rate is computed for the flow model',
   )
   wireBack()
 
@@ -1091,6 +1118,9 @@ function renderMultiphase(): void {
       'liq-rate',
       'gas-rate',
       'gas-rate-unit',
+      'psia',
+      'temp-f',
+      'z',
       'rho-l',
       'rho-g',
       'sigma',
@@ -1103,11 +1133,56 @@ function renderMultiphase(): void {
       const tubingIdIn = num(app.querySelector<HTMLInputElement>('#tubing-id')!)
       const liqBblDay = num(app.querySelector<HTMLInputElement>('#liq-rate')!)
       const gasRaw = num(app.querySelector<HTMLInputElement>('#gas-rate')!)
-      const gasUnit = (
-        app.querySelector('#gas-rate-unit') as HTMLSelectElement
-      ).value
-      const gasRateFt3PerS =
-        gasUnit === 'MCFD' ? mcfdToFt3PerS(gasRaw) : gasRaw
+      const gasUnit = (app.querySelector('#gas-rate-unit') as HTMLSelectElement)
+        .value as StdGasRateUnit
+      const psia = num(app.querySelector<HTMLInputElement>('#psia')!)
+      const tempF = num(app.querySelector<HTMLInputElement>('#temp-f')!)
+      const zFactor = num(app.querySelector<HTMLInputElement>('#z')!)
+      const gasInSituEl = app.querySelector<HTMLInputElement>('#gas-insitu')!
+
+      const setText = (id: string, value: string) => {
+        const el = app.querySelector<HTMLInputElement>(`#${id}`)
+        if (el) el.value = value
+      }
+      const clearNum = (id: string) => {
+        const el = app.querySelector<HTMLInputElement>(`#${id}`)
+        if (el) el.value = ''
+      }
+
+      let gasRateFt3PerS: number
+      try {
+        const stdFt3PerS = stdGasRateToFt3PerS(gasRaw, gasUnit)
+        gasRateFt3PerS = stdToInSituGasRateFt3PerS(
+          stdFt3PerS,
+          psia,
+          tempF,
+          zFactor,
+        )
+        setNum(gasInSituEl, gasRateFt3PerS)
+      } catch {
+        gasInSituEl.value = ''
+        setText('regime', '')
+        setText('erosional-ok', '')
+        setText('film-regime', '')
+        for (const id of [
+          'vsl',
+          'vsg',
+          'vm',
+          'vsg-bub-slug',
+          'vsg-slug-ann',
+          'ku',
+          'void',
+          'holdup',
+          'rho-slip',
+          've',
+          'tau-norsok',
+          'norsok-ratio',
+        ]) {
+          clearNum(id)
+        }
+        clearAnnular()
+        return
+      }
 
       const inputs: WellInputs = {
         tubingIdIn,
@@ -1125,15 +1200,6 @@ function renderMultiphase(): void {
         ),
       }
       const cFactor = num(app.querySelector<HTMLInputElement>('#c-factor')!)
-
-      const setText = (id: string, value: string) => {
-        const el = app.querySelector<HTMLInputElement>(`#${id}`)
-        if (el) el.value = value
-      }
-      const clearNum = (id: string) => {
-        const el = app.querySelector<HTMLInputElement>(`#${id}`)
-        if (el) el.value = ''
-      }
 
       try {
         const result = runFullCalculation(inputs, {

@@ -669,6 +669,49 @@ export function ft3PerSToMcfd(ft3PerS: number): number {
   return (ft3PerS * 86400) / 1000
 }
 
+/** Standard / surface gas rate units (60 °F, 14.7 psia). */
+export type StdGasRateUnit = 'MCFD' | 'MMCFD' | 'ft3/s'
+
+export const P_STD_PSIA = 14.7
+/** 60 °F absolute. */
+export const T_STD_RANKINE = 520
+
+/** Convert a standard gas rate to ft³/s at standard conditions. */
+export function stdGasRateToFt3PerS(
+  value: number,
+  unit: StdGasRateUnit,
+): number {
+  if (unit === 'MCFD') return (value * 1000) / 86400
+  if (unit === 'MMCFD') return (value * 1_000_000) / 86400
+  return value
+}
+
+/**
+ * Standard volumetric gas rate → in-situ ft³/s via real-gas law:
+ *   Q_in-situ = Q_std × (P_std / P) × (T / T_std) × Z
+ * Temperatures in Rankine; P in psia.
+ */
+export function stdToInSituGasRateFt3PerS(
+  stdFt3PerS: number,
+  pressurePsia: number,
+  temperatureF: number,
+  z: number,
+): number {
+  if (pressurePsia <= 0) {
+    throw new Error('Pressure must be positive (psia).')
+  }
+  if (z <= 0) {
+    throw new Error('Gas compressibility Z must be positive.')
+  }
+  const tR = temperatureF + 460
+  if (tR <= 0) {
+    throw new Error('Temperature must be above absolute zero.')
+  }
+  return (
+    stdFt3PerS * (P_STD_PSIA / pressurePsia) * (tR / T_STD_RANKINE) * z
+  )
+}
+
 export function runFullCalculation(
   inp: WellInputs,
   opts: RunOptions = {},
