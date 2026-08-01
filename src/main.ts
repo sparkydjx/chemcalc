@@ -118,6 +118,27 @@ type FieldOpts = {
   /** Variable key for solve-for; omit to hide checkbox. */
   solveKey?: string
   solved?: boolean
+  /** Short plain-language explanation shown when the ? link is clicked. */
+  help?: string
+}
+
+function escapeHtml(text: string): string {
+  return text
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+}
+
+/** Clickable ? that expands a short explanation under the field label. */
+function helpLink(label: string, help?: string): string {
+  if (!help) return ''
+  return `
+    <details class="field-help">
+      <summary aria-label="Explain ${escapeHtml(label)}">?</summary>
+      <p class="field-help-body">${escapeHtml(help)}</p>
+    </details>
+  `
 }
 
 /** Keep unit dropdowns alphanumeric by label for existing and future menus. */
@@ -163,7 +184,10 @@ function field(label: string, opts: FieldOpts): string {
   return `
     <div class="field${opts.solved ? ' is-solved' : ''}" data-field="${opts.solveKey ?? opts.id}">
       <div class="field-header">
-        <span class="field-label">${label}</span>
+        <span class="field-label-row">
+          <span class="field-label">${label}</span>
+          ${helpLink(label, opts.help)}
+        </span>
         ${solveHtml}
       </div>
       <span class="field-controls">
@@ -183,11 +207,19 @@ function field(label: string, opts: FieldOpts): string {
 }
 
 /** Read-only text output (regime labels, yes/no flags). */
-function textOut(label: string, id: string, unit?: string): string {
+function textOut(
+  label: string,
+  id: string,
+  unit?: string,
+  help?: string,
+): string {
   return `
     <div class="field is-solved" data-field="${id}">
       <div class="field-header">
-        <span class="field-label">${label}</span>
+        <span class="field-label-row">
+          <span class="field-label">${label}</span>
+          ${helpLink(label, help)}
+        </span>
       </div>
       <span class="field-controls">
         <input id="${id}" type="text" readonly tabindex="-1" value="" />
@@ -248,6 +280,18 @@ function renderHome(): void {
 
 function wireBack(): void {
   app.querySelector('#back')?.addEventListener('click', () => navigate('home'))
+}
+
+/** Only one field-help tip open at a time. */
+function wireFieldHelp(): void {
+  app.querySelectorAll<HTMLDetailsElement>('details.field-help').forEach((el) => {
+    el.addEventListener('toggle', () => {
+      if (!el.open) return
+      app.querySelectorAll<HTMLDetailsElement>('details.field-help').forEach((other) => {
+        if (other !== el) other.open = false
+      })
+    })
+  })
 }
 
 /** Exclusive solve-for checkboxes + live recalculation. */
@@ -885,12 +929,14 @@ function renderMultiphase(): void {
           min: '0',
           step: '0.01',
           unit: 'in',
+          help: 'Inside diameter of the tubing or pipe the fluids flow through.',
         })}
         ${field('Liquid rate', {
           id: 'liq-rate',
           value: 600,
           min: '0',
           unit: 'Bbls/Day',
+          help: 'Daily liquid volume (oil + water) at stock-tank conditions.',
         })}
         ${field('Gas rate (standard)', {
           id: 'gas-rate',
@@ -904,17 +950,20 @@ function renderMultiphase(): void {
           ],
           unitId: 'gas-rate-unit',
           unitValue: 'MMCFD',
+          help: 'Gas volume rate at standard conditions (14.7 psia, 60 °F). Choose MCFD, MMSCFD, or ft³/s.',
         })}
         ${field('Pressure', {
           id: 'psia',
           value: 1000,
           min: '0',
           unit: 'psia',
+          help: 'Local flowing pressure at the calculation point, used to convert standard gas rate to in-situ.',
         })}
         ${field('Temperature', {
           id: 'temp-f',
           value: 150,
           unit: '°F',
+          help: 'Local flowing temperature at the calculation point.',
         })}
         ${field('Gas compressibility Z', {
           id: 'z',
@@ -922,18 +971,21 @@ function renderMultiphase(): void {
           min: '0',
           step: '0.01',
           unit: '—',
+          help: 'Real-gas compressibility factor — how much the gas differs from ideal-gas behavior at local P and T.',
         })}
         ${field('Gas rate (in-situ)', {
           id: 'gas-insitu',
           value: '',
           unit: 'ft³/s',
           solved: true,
+          help: 'Computed gas volume rate inside the pipe at local P, T, and Z. Used for superficial velocities.',
         })}
         ${field('Liquid density', {
           id: 'rho-l',
           value: 55,
           min: '0',
           unit: 'lbm/ft³',
+          help: 'Mass per unit volume of the liquid phase.',
         })}
         ${field('Gas density', {
           id: 'rho-g',
@@ -941,12 +993,14 @@ function renderMultiphase(): void {
           min: '0',
           step: '0.01',
           unit: 'lbm/ft³',
+          help: 'Mass per unit volume of the gas phase at local (in-situ) conditions.',
         })}
         ${field('Interfacial tension', {
           id: 'sigma',
           value: 20,
           min: '0',
           unit: 'dyne/cm',
+          help: 'Surface tension between gas and liquid. Affects bubble rise speed and the onset of annular flow.',
         })}
         ${field('Liquid viscosity', {
           id: 'mu-l',
@@ -954,6 +1008,7 @@ function renderMultiphase(): void {
           min: '0',
           step: '0.01',
           unit: 'cP',
+          help: 'Liquid dynamic viscosity — resistance of the liquid to flow.',
         })}
         ${field('Gas viscosity', {
           id: 'mu-g',
@@ -961,6 +1016,7 @@ function renderMultiphase(): void {
           min: '0',
           step: '0.001',
           unit: 'cP',
+          help: 'Gas dynamic viscosity — resistance of the gas to flow.',
         })}
         ${field('Pipe roughness', {
           id: 'roughness',
@@ -968,51 +1024,64 @@ function renderMultiphase(): void {
           min: '0',
           step: '0.0001',
           unit: 'in',
+          help: 'Absolute wall roughness used in the NORSOK M-506 friction factor. Typical new steel ≈ 0.0018 in.',
         })}
         ${field('API 14E C factor', {
           id: 'c-factor',
           value: 100,
           min: '0',
           unit: 'C',
+          help: 'Empirical constant in the API RP 14E erosional velocity limit Ve = C / √ρm. Often 100–125 for solids-free continuous service.',
         })}
 
         ${sectionTitle('Regime')}
-        ${textOut('Flow regime', 'regime')}
+        ${textOut(
+          'Flow regime',
+          'regime',
+          undefined,
+          'Bubble, slug/churn, or annular — how gas and liquid are arranged in the pipe at these conditions.',
+        )}
         ${field('Vsl', {
           id: 'vsl',
           value: '',
           unit: 'ft/s',
           solved: true,
+          help: 'Liquid superficial velocity: liquid volumetric rate divided by pipe area (as if liquid alone filled the pipe).',
         })}
         ${field('Vsg', {
           id: 'vsg',
           value: '',
           unit: 'ft/s',
           solved: true,
+          help: 'Gas superficial velocity: in-situ gas volumetric rate divided by pipe area.',
         })}
         ${field('Vm', {
           id: 'vm',
           value: '',
           unit: 'ft/s',
           solved: true,
+          help: 'Mixture velocity = Vsl + Vsg.',
         })}
         ${field('Bubble → slug Vsg', {
           id: 'vsg-bub-slug',
           value: '',
           unit: 'ft/s',
           solved: true,
+          help: 'Predicted gas superficial velocity where flow leaves bubble and enters slug/churn (Hasan–Kabir).',
         })}
         ${field('Slug → annular Vsg', {
           id: 'vsg-slug-ann',
           value: '',
           unit: 'ft/s',
           solved: true,
+          help: 'Predicted gas superficial velocity where flow becomes annular (Taitel/Turner criterion).',
         })}
         ${field('Kutateladze Ku_G', {
           id: 'ku',
           value: '',
           unit: '—',
           solved: true,
+          help: 'Dimensionless gas velocity. Annular onset is typically near Ku_G ≈ 3.1.',
         })}
 
         ${sectionTitle('Holdup / Density')}
@@ -1021,18 +1090,21 @@ function renderMultiphase(): void {
           value: '',
           unit: '—',
           solved: true,
+          help: 'Fraction of the pipe cross-section occupied by gas.',
         })}
         ${field('Liquid holdup', {
           id: 'holdup',
           value: '',
           unit: '—',
           solved: true,
+          help: 'Fraction of the pipe cross-section occupied by liquid (1 − void fraction).',
         })}
         ${field('Mixture density (slip)', {
           id: 'rho-slip',
           value: '',
           unit: 'lbm/ft³',
           solved: true,
+          help: 'Average mixture density using liquid holdup and gas void fraction (accounts for slip between phases).',
         })}
 
         ${sectionTitle('API RP 14E Screen')}
@@ -1041,8 +1113,14 @@ function renderMultiphase(): void {
           value: '',
           unit: 'ft/s',
           solved: true,
+          help: 'API RP 14E erosional velocity limit Ve = C / √ρm. Stay below this to reduce erosion risk.',
         })}
-        ${textOut('Below erosional limit', 'erosional-ok')}
+        ${textOut(
+          'Below erosional limit',
+          'erosional-ok',
+          undefined,
+          'Whether the mixture velocity Vm is below the API RP 14E erosional velocity limit.',
+        )}
 
         ${sectionTitle('Annular Film / Shear')}
         ${field('Entrainment fraction E', {
@@ -1050,31 +1128,41 @@ function renderMultiphase(): void {
           value: '',
           unit: '—',
           solved: true,
+          help: 'Fraction of the liquid carried as droplets in the gas core (Ishii–Mishima). Shown for annular flow only.',
         })}
         ${field('Film Reynolds number', {
           id: 're-film',
           value: '',
           unit: '—',
           solved: true,
+          help: 'How turbulent the wall liquid film is. Values below about 1000 are treated as laminar.',
         })}
-        ${textOut('Film regime', 'film-regime')}
+        ${textOut(
+          'Film regime',
+          'film-regime',
+          undefined,
+          'Whether the wall liquid film is laminar or turbulent based on film Reynolds number.',
+        )}
         ${field('Film thickness', {
           id: 'delta',
           value: '',
           unit: 'in',
           solved: true,
+          help: 'Thickness of the liquid film on the wall in annular flow.',
         })}
         ${field('Interfacial shear τᵢ', {
           id: 'tau-i',
           value: '',
           unit: 'Pa',
           solved: true,
+          help: 'Shear stress at the gas–film interface (Wallis wavy-film friction).',
         })}
         ${field('Wall shear τ_w (annular)', {
           id: 'tau-w',
           value: '',
           unit: 'Pa',
           solved: true,
+          help: 'Wall shear from the annular-film force balance. Useful for film/inhibitor stability checks.',
         })}
 
         ${sectionTitle('NORSOK M-506')}
@@ -1083,19 +1171,22 @@ function renderMultiphase(): void {
           value: '',
           unit: 'Pa',
           solved: true,
+          help: 'Mixture-based wall shear stress from NORSOK M-506:2017 — the S value used in the CO₂ corrosion flow correction.',
         })}
         ${field('τ_w / 19 Pa', {
           id: 'norsok-ratio',
           value: '',
           unit: '—',
           solved: true,
+          help: 'Ratio of NORSOK wall shear to the 19 Pa reference used in the NORSOK flow correction factor.',
         })}
       </form>
     `,
     true,
-    'Enter standard gas rate + P, T, Z — in-situ rate is computed for the flow model',
+    'Enter standard gas rate + P, T, Z — tap ? next to a label for a short explanation',
   )
   wireBack()
+  wireFieldHelp()
 
   const clearAnnular = () => {
     for (const id of [
