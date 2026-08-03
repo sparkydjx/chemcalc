@@ -116,14 +116,17 @@ function setNum(el: HTMLInputElement, value: number): void {
   el.value = formatted === '—' ? '' : formatted
 }
 
-/** Re-apply thousands commas after the user finishes editing. */
+/** Re-apply thousands commas after the user finishes editing (preserve exact value). */
 function formatNumInput(el: HTMLInputElement): void {
   const v = num(el)
-  if (Number.isFinite(v)) setNum(el, v)
+  if (!Number.isFinite(v)) return
+  el.value = v.toLocaleString('en-US', { maximumFractionDigits: 20 })
 }
 
 function displayValue(value: number | string): string {
-  if (typeof value === 'number') return formatResult(value)
+  if (typeof value === 'number') {
+    return value.toLocaleString('en-US', { maximumFractionDigits: 20 })
+  }
   return value
 }
 
