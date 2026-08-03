@@ -283,7 +283,7 @@ body {
   grid-template-columns: 1fr;
 }
 
-input[type='number'],
+input.num-input,
 input[type='text'],
 select {
   width: 100%;
@@ -297,7 +297,7 @@ select {
   font-size: 1.05rem;
 }
 
-input[type='number']:focus,
+input.num-input:focus,
 input[type='text']:focus,
 select:focus {
   outline: 2px solid var(--accent);
@@ -305,7 +305,7 @@ select:focus {
   background: #fff;
 }
 
-input[type='number'][readonly],
+input.num-input[readonly],
 input[type='text'][readonly] {
   border-color: transparent;
   background: transparent;
@@ -316,13 +316,13 @@ input[type='text'][readonly] {
   cursor: default;
 }
 
-input[type='number'][readonly]:focus,
+input.num-input[readonly]:focus,
 input[type='text'][readonly]:focus {
   outline: none;
   background: transparent;
 }
 
-input[type='text'][readonly] {
+input[type='text'][readonly]:not(.num-input) {
   font-size: clamp(1.1rem, 4vw, 1.35rem);
   text-transform: capitalize;
 }

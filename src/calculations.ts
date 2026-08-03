@@ -314,13 +314,22 @@ export function galsPerDayToRate(gpd: number, unit: RateUnit): number {
   return gpd
 }
 
+/** Parse a user-facing number string that may include thousands commas. */
+export function parseNumString(raw: string): number {
+  const cleaned = raw.replace(/,/g, '').trim()
+  if (cleaned === '') return NaN
+  const v = Number(cleaned)
+  return Number.isFinite(v) ? v : NaN
+}
+
 export function formatResult(n: number, digits = 4): string {
   if (!Number.isFinite(n)) return '—'
-  if (Math.abs(n) >= 1000 || (Math.abs(n) > 0 && Math.abs(n) < 0.001)) {
+  if (Math.abs(n) > 0 && Math.abs(n) < 0.001) {
     return n.toPrecision(4)
   }
-  const rounded = Number(n.toFixed(digits))
-  return String(rounded)
+  const value =
+    Math.abs(n) >= 1000 ? Number(n.toPrecision(4)) : Number(n.toFixed(digits))
+  return value.toLocaleString('en-US', { maximumFractionDigits: 20 })
 }
 
 // --- API RP 14E erosional velocity (imperial / oilfield units) ---
