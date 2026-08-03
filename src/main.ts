@@ -34,6 +34,7 @@ import {
   rateToGalsPerDay,
   galsPerDayToRate,
   formatResult,
+  parseNumString,
   type RateUnit,
   type DiaUnit,
   type LenUnit,
@@ -107,12 +108,26 @@ const CALCS: { id: Exclude<CalcId, 'home'>; title: string; blurb: string }[] = [
 const app = document.querySelector<HTMLDivElement>('#app')!
 
 function num(el: HTMLInputElement): number {
-  const v = el.valueAsNumber
-  return Number.isFinite(v) ? v : NaN
+  return parseNumString(el.value)
 }
 
 function setNum(el: HTMLInputElement, value: number): void {
-  el.value = formatResult(value) === '—' ? '' : formatResult(value)
+  const formatted = formatResult(value)
+  el.value = formatted === '—' ? '' : formatted
+}
+
+/** Re-apply thousands commas after the user finishes editing (preserve exact value). */
+function formatNumInput(el: HTMLInputElement): void {
+  const v = num(el)
+  if (!Number.isFinite(v)) return
+  el.value = v.toLocaleString('en-US', { maximumFractionDigits: 20 })
+}
+
+function displayValue(value: number | string): string {
+  if (typeof value === 'number') {
+    return value.toLocaleString('en-US', { maximumFractionDigits: 20 })
+  }
+  return value
 }
 
 type UnitOption = { value: string; label: string }
@@ -204,11 +219,12 @@ function field(label: string, opts: FieldOpts): string {
       <span class="field-controls">
         <input
           id="${opts.id}"
-          type="number"
+          class="num-input"
+          type="text"
           inputmode="decimal"
-          value="${opts.value}"
-          step="${opts.step ?? 'any'}"
-          ${opts.min !== undefined ? `min="${opts.min}"` : ''}
+          value="${displayValue(opts.value)}"
+          autocomplete="off"
+          spellcheck="false"
           ${opts.solved ? 'readonly tabindex="-1"' : ''}
         />
         ${unitHtml}
@@ -318,7 +334,7 @@ function wireSolveForm(
       const key = wrap.dataset.field!
       const isSolved = key === solveFor
       wrap.classList.toggle('is-solved', isSolved)
-      const input = wrap.querySelector<HTMLInputElement>('input[type="number"]')
+      const input = wrap.querySelector<HTMLInputElement>('input.num-input')
       const check = wrap.querySelector<HTMLInputElement>('.solve-check')
       if (input) {
         input.readOnly = isSolved
@@ -345,9 +361,15 @@ function wireSolveForm(
 
   const run = () => compute(solveFor)
   for (const id of inputIds) {
-    const el = app.querySelector(`#${id}`)
+    const el = app.querySelector<HTMLInputElement | HTMLSelectElement>(`#${id}`)
     el?.addEventListener('input', run)
     el?.addEventListener('change', run)
+    if (el instanceof HTMLInputElement && el.classList.contains('num-input')) {
+      el.addEventListener('blur', () => {
+        formatNumInput(el)
+        run()
+      })
+    }
   }
 
   applySolveUi()
@@ -761,9 +783,15 @@ function renderIonLbs(): void {
 /** Live recalculation for forward-only (no solve-for) forms. */
 function wireLiveForm(inputIds: string[], compute: () => void): void {
   for (const id of inputIds) {
-    const el = app.querySelector(`#${id}`)
+    const el = app.querySelector<HTMLInputElement | HTMLSelectElement>(`#${id}`)
     el?.addEventListener('input', compute)
     el?.addEventListener('change', compute)
+    if (el instanceof HTMLInputElement && el.classList.contains('num-input')) {
+      el.addEventListener('blur', () => {
+        formatNumInput(el)
+        compute()
+      })
+    }
   }
   compute()
 }
