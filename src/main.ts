@@ -96,7 +96,7 @@ const CALCS: { id: Exclude<CalcId, 'home'>; title: string; blurb: string }[] = [
   {
     id: 'erosional-velocity',
     title: 'Erosional Velocity (API RP 14E)',
-    blurb: 'Two-phase mixture density and erosional velocity limit',
+    blurb: 'Mixture density, erosional limit, and superficial velocities',
   },
   {
     id: 'multiphase',
@@ -976,6 +976,17 @@ function renderErosionalVelocity(): void {
           unitId: 'qG-unit',
           unitValue: 'MMCFD',
         })}
+        ${field('Pipe ID', {
+          id: 'dia',
+          value: 3,
+          min: '0',
+          unitOptions: [
+            { value: 'in', label: 'in' },
+            { value: 'mm', label: 'mm' },
+          ],
+          unitId: 'dia-unit',
+          unitValue: 'in',
+        })}
         ${field('Pressure', {
           id: 'psia',
           value: 1000,
@@ -1037,10 +1048,43 @@ function renderErosionalVelocity(): void {
           unitValue: 'ft/sec',
           solved: true,
         })}
+        ${field('Liquid superficial velocity', {
+          id: 'vsl',
+          value: '',
+          unitOptions: [
+            { value: 'ft/sec', label: 'ft/sec' },
+            { value: 'm/sec', label: 'm/sec' },
+          ],
+          unitId: 'vsl-unit',
+          unitValue: 'ft/sec',
+          solved: true,
+        })}
+        ${field('Gas superficial velocity', {
+          id: 'vsg',
+          value: '',
+          unitOptions: [
+            { value: 'ft/sec', label: 'ft/sec' },
+            { value: 'm/sec', label: 'm/sec' },
+          ],
+          unitId: 'vsg-unit',
+          unitValue: 'ft/sec',
+          solved: true,
+        })}
+        ${field('Mixture velocity', {
+          id: 'vm',
+          value: '',
+          unitOptions: [
+            { value: 'ft/sec', label: 'ft/sec' },
+            { value: 'm/sec', label: 'm/sec' },
+          ],
+          unitId: 'vm-unit',
+          unitValue: 'ft/sec',
+          solved: true,
+        })}
       </form>
     `,
     true,
-    'API RP 14E two-phase limit — enter conditions to compute V<sub>e</sub>',
+    'API RP 14E two-phase limit — enter conditions to compute V<sub>e</sub> and superficial velocities',
   )
   wireBack()
 
@@ -1053,27 +1097,56 @@ function renderErosionalVelocity(): void {
   })
 
   wireLiveForm(
-    ['sL', 'qL', 'sG', 'qG', 'qG-unit', 'psia', 'tempF', 'z', 'c', 've-unit'],
+    [
+      'sL',
+      'qL',
+      'sG',
+      'qG',
+      'qG-unit',
+      'dia',
+      'dia-unit',
+      'psia',
+      'tempF',
+      'z',
+      'c',
+      've-unit',
+      'vsl-unit',
+      'vsg-unit',
+      'vm-unit',
+    ],
     () => {
       const sL = num(app.querySelector<HTMLInputElement>('#sL')!)
       const qL = num(app.querySelector<HTMLInputElement>('#qL')!)
       const sG = num(app.querySelector<HTMLInputElement>('#sG')!)
       const qGEl = app.querySelector<HTMLInputElement>('#qG')!
+      const diaEl = app.querySelector<HTMLInputElement>('#dia')!
       const psia = num(app.querySelector<HTMLInputElement>('#psia')!)
       const tempF = num(app.querySelector<HTMLInputElement>('#tempF')!)
       const z = num(app.querySelector<HTMLInputElement>('#z')!)
       const c = num(cEl)
       const qGUnit = (app.querySelector('#qG-unit') as HTMLSelectElement)
         .value as GasRateUnit
+      const diaUnit = (app.querySelector('#dia-unit') as HTMLSelectElement)
+        .value as DiaUnit
       const veUnit = (app.querySelector('#ve-unit') as HTMLSelectElement)
+        .value as VelUnit
+      const vslUnit = (app.querySelector('#vsl-unit') as HTMLSelectElement)
+        .value as VelUnit
+      const vsgUnit = (app.querySelector('#vsg-unit') as HTMLSelectElement)
+        .value as VelUnit
+      const vmUnit = (app.querySelector('#vm-unit') as HTMLSelectElement)
         .value as VelUnit
 
       const glrEl = app.querySelector<HTMLInputElement>('#glr')!
       const densityEl = app.querySelector<HTMLInputElement>('#density')!
       const veEl = app.querySelector<HTMLInputElement>('#ve')!
+      const vslEl = app.querySelector<HTMLInputElement>('#vsl')!
+      const vsgEl = app.querySelector<HTMLInputElement>('#vsg')!
+      const vmEl = app.querySelector<HTMLInputElement>('#vm')!
 
       try {
         const qGMmscfd = toMcfd(num(qGEl), qGUnit) / 1000
+        const diameterIn = toInches(num(diaEl), diaUnit)
         const result = calculateApiRp14E(
           {
             liquidSpecificGravity: sL,
@@ -1085,14 +1158,27 @@ function renderErosionalVelocity(): void {
             gasCompressibilityZ: z,
           },
           c,
+          diameterIn,
         )
         setNum(glrEl, result.gasLiquidRatioScfPerBbl)
         setNum(densityEl, result.mixtureDensityLbPerFt3)
         setNum(veEl, fromFps(result.erosionalVelocityFtPerSec, veUnit))
+        setNum(
+          vslEl,
+          fromFps(result.liquidSuperficialVelocityFtPerSec!, vslUnit),
+        )
+        setNum(
+          vsgEl,
+          fromFps(result.gasSuperficialVelocityFtPerSec!, vsgUnit),
+        )
+        setNum(vmEl, fromFps(result.mixtureVelocityFtPerSec!, vmUnit))
       } catch {
         glrEl.value = ''
         densityEl.value = ''
         veEl.value = ''
+        vslEl.value = ''
+        vsgEl.value = ''
+        vmEl.value = ''
       }
     },
   )

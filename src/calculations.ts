@@ -355,6 +355,12 @@ export interface ErosionalVelocityResult {
   gasLiquidRatioScfPerBbl: number
   mixtureDensityLbPerFt3: number
   erosionalVelocityFtPerSec: number
+  /** Liquid superficial velocity Vsl (ft/s), when pipe diameter is provided */
+  liquidSuperficialVelocityFtPerSec?: number
+  /** Gas superficial velocity Vsg (ft/s), when pipe diameter is provided */
+  gasSuperficialVelocityFtPerSec?: number
+  /** Mixture velocity Vm = Vsl + Vsg (ft/s), when pipe diameter is provided */
+  mixtureVelocityFtPerSec?: number
 }
 
 /** Empirical C constants per API RP 14E (solids-free service) */
@@ -418,10 +424,53 @@ export function calculateErosionalVelocity(
   return c / Math.sqrt(mixtureDensityLbPerFt3)
 }
 
+/**
+ * Superficial liquid and gas velocities (ft/s) using the same equations as the
+ * Liquid Velocity and Gas Velocity calculators:
+ *   Vsl = liquidVelocityFps(qL, ID)
+ *   Vsg = gasVelocityFps(qG, ID, P_psig)
+ *   Vm  = Vsl + Vsg
+ */
+export function calculateSuperficialVelocities(
+  liquidFlowRateBblPerDay: number,
+  gasFlowRateMcfd: number,
+  diameterIn: number,
+  pressurePsia: number,
+): {
+  liquidSuperficialVelocityFtPerSec: number
+  gasSuperficialVelocityFtPerSec: number
+  mixtureVelocityFtPerSec: number
+} {
+  if (diameterIn <= 0) {
+    throw new Error('Pipe diameter must be positive.')
+  }
+  if (pressurePsia <= 0) {
+    throw new Error('Pressure must be positive (psia).')
+  }
+
+  const liquidSuperficialVelocityFtPerSec = liquidVelocityFps(
+    liquidFlowRateBblPerDay,
+    diameterIn,
+  )
+  const gasSuperficialVelocityFtPerSec = gasVelocityFps(
+    gasFlowRateMcfd,
+    diameterIn,
+    pressurePsia - 14.7,
+  )
+
+  return {
+    liquidSuperficialVelocityFtPerSec,
+    gasSuperficialVelocityFtPerSec,
+    mixtureVelocityFtPerSec:
+      liquidSuperficialVelocityFtPerSec + gasSuperficialVelocityFtPerSec,
+  }
+}
+
 /** Mixture density and erosional velocity in one call. */
 export function calculateApiRp14E(
   inputs: MixtureDensityInputs,
   c: number,
+  diameterIn?: number,
 ): ErosionalVelocityResult {
   const gasLiquidRatioScfPerBbl =
     (inputs.gasFlowRateMMscfd * 1_000_000) / inputs.liquidFlowRateBblPerDay
@@ -431,9 +480,25 @@ export function calculateApiRp14E(
     c,
   )
 
-  return {
+  const result: ErosionalVelocityResult = {
     gasLiquidRatioScfPerBbl,
     mixtureDensityLbPerFt3,
     erosionalVelocityFtPerSec,
   }
+
+  if (diameterIn !== undefined) {
+    const superficial = calculateSuperficialVelocities(
+      inputs.liquidFlowRateBblPerDay,
+      inputs.gasFlowRateMMscfd * 1000,
+      diameterIn,
+      inputs.pressurePsia,
+    )
+    result.liquidSuperficialVelocityFtPerSec =
+      superficial.liquidSuperficialVelocityFtPerSec
+    result.gasSuperficialVelocityFtPerSec =
+      superficial.gasSuperficialVelocityFtPerSec
+    result.mixtureVelocityFtPerSec = superficial.mixtureVelocityFtPerSec
+  }
+
+  return result
 }
