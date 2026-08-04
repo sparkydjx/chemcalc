@@ -424,39 +424,63 @@ export function calculateErosionalVelocity(
   return c / Math.sqrt(mixtureDensityLbPerFt3)
 }
 
+/** Standard conditions for gas rate conversion (60 °F, 14.7 psia) — same base used in calculateMixtureDensity. */
+const P_STD_PSIA = 14.7
+const T_STD_RANKINE = 520
+
 /**
- * Superficial liquid and gas velocities (ft/s) using the same equations as the
- * Liquid Velocity and Gas Velocity calculators:
- *   Vsl = liquidVelocityFps(qL, ID)
- *   Vsg = gasVelocityFps(qG, ID, P_psig)
+ * Superficial liquid and gas velocities (ft/s) at flowing (in-situ) conditions,
+ * using the same P/T/Z real-gas correction already applied for mixture density
+ * (and used identically in the multiphase module's stdToInSituGasRateFt3PerS):
+ *
+ *   A   = (π/4)(ID/12)²                                        (ft²)
+ *   Vsl = (Q_L × 5.6146 / 86400) / A                            (ft/s)
+ *   Q_g,actual = (Q_g × 1e6 / 86400) × (P_std/P) × (T/T_std) × Z (ft³/s)
+ *   Vsg = Q_g,actual / A                                        (ft/s)
  *   Vm  = Vsl + Vsg
+ *
+ * Unlike the single-phase Gas Velocity calculator (which assumes fixed T and
+ * Z for a quick check), this uses the actual temperature and compressibility
+ * factor already entered for the mixture-density calculation.
  */
 export function calculateSuperficialVelocities(
-  liquidFlowRateBblPerDay: number,
-  gasFlowRateMcfd: number,
+  inputs: MixtureDensityInputs,
   diameterIn: number,
-  pressurePsia: number,
 ): {
   liquidSuperficialVelocityFtPerSec: number
   gasSuperficialVelocityFtPerSec: number
   mixtureVelocityFtPerSec: number
 } {
+  const {
+    liquidFlowRateBblPerDay: qL,
+    gasFlowRateMMscfd: qG,
+    pressurePsia: p,
+    temperatureRankine: t,
+    gasCompressibilityZ: z,
+  } = inputs
+
   if (diameterIn <= 0) {
     throw new Error('Pipe diameter must be positive.')
   }
-  if (pressurePsia <= 0) {
+  if (p <= 0) {
     throw new Error('Pressure must be positive (psia).')
   }
+  if (t <= 0) {
+    throw new Error('Temperature must be positive (°R).')
+  }
+  if (z <= 0) {
+    throw new Error('Gas compressibility Z must be positive.')
+  }
 
-  const liquidSuperficialVelocityFtPerSec = liquidVelocityFps(
-    liquidFlowRateBblPerDay,
-    diameterIn,
-  )
-  const gasSuperficialVelocityFtPerSec = gasVelocityFps(
-    gasFlowRateMcfd,
-    diameterIn,
-    pressurePsia - 14.7,
-  )
+  const areaFt2 = (PI / 4) * (diameterIn / 12) ** 2
+
+  const liquidRateFt3PerSec = (qL * 5.6146) / 86400
+  const liquidSuperficialVelocityFtPerSec = liquidRateFt3PerSec / areaFt2
+
+  const gasRateStdFt3PerSec = (qG * 1_000_000) / 86400
+  const gasRateActualFt3PerSec =
+    gasRateStdFt3PerSec * (P_STD_PSIA / p) * (t / T_STD_RANKINE) * z
+  const gasSuperficialVelocityFtPerSec = gasRateActualFt3PerSec / areaFt2
 
   return {
     liquidSuperficialVelocityFtPerSec,
@@ -487,12 +511,7 @@ export function calculateApiRp14E(
   }
 
   if (diameterIn !== undefined) {
-    const superficial = calculateSuperficialVelocities(
-      inputs.liquidFlowRateBblPerDay,
-      inputs.gasFlowRateMMscfd * 1000,
-      diameterIn,
-      inputs.pressurePsia,
-    )
+    const superficial = calculateSuperficialVelocities(inputs, diameterIn)
     result.liquidSuperficialVelocityFtPerSec =
       superficial.liquidSuperficialVelocityFtPerSec
     result.gasSuperficialVelocityFtPerSec =
