@@ -657,6 +657,18 @@ function renderGasVelocity(): void {
           unit: 'psig',
           solveKey: 'psig',
         })}
+        ${field('Temperature', {
+          id: 'tempF',
+          value: 60,
+          unit: '°F',
+        })}
+        ${field('Gas compressibility Z', {
+          id: 'z',
+          value: 1,
+          min: '0',
+          step: '0.01',
+          unit: '—',
+        })}
         ${field('Velocity', {
           id: 'vel',
           value: '',
@@ -677,11 +689,23 @@ function renderGasVelocity(): void {
   wireBack()
   wireSolveForm(
     'vel',
-    ['rate', 'rate-unit', 'dia', 'dia-unit', 'psig', 'vel', 'vel-unit'],
+    [
+      'rate',
+      'rate-unit',
+      'dia',
+      'dia-unit',
+      'psig',
+      'tempF',
+      'z',
+      'vel',
+      'vel-unit',
+    ],
     (solveFor) => {
       const rateEl = app.querySelector<HTMLInputElement>('#rate')!
       const diaEl = app.querySelector<HTMLInputElement>('#dia')!
       const psigEl = app.querySelector<HTMLInputElement>('#psig')!
+      const tempFEl = app.querySelector<HTMLInputElement>('#tempF')!
+      const zEl = app.querySelector<HTMLInputElement>('#z')!
       const velEl = app.querySelector<HTMLInputElement>('#vel')!
       const rateUnit = (app.querySelector('#rate-unit') as HTMLSelectElement)
         .value as GasRateUnit
@@ -689,12 +713,16 @@ function renderGasVelocity(): void {
         .value as DiaUnit
       const velUnit = (app.querySelector('#vel-unit') as HTMLSelectElement)
         .value as VelUnit
+      const tempF = num(tempFEl)
+      const z = num(zEl)
 
       if (solveFor === 'vel') {
         const fps = gasVelocityFps(
           toMcfd(num(rateEl), rateUnit),
           toInches(num(diaEl), diaUnit),
           num(psigEl),
+          tempF,
+          z,
         )
         setNum(velEl, fromFps(fps, velUnit))
       } else if (solveFor === 'rate') {
@@ -702,6 +730,8 @@ function renderGasVelocity(): void {
           toFps(num(velEl), velUnit),
           toInches(num(diaEl), diaUnit),
           num(psigEl),
+          tempF,
+          z,
         )
         setNum(rateEl, fromMcfd(mcfd, rateUnit))
       } else if (solveFor === 'dia') {
@@ -709,6 +739,8 @@ function renderGasVelocity(): void {
           toMcfd(num(rateEl), rateUnit),
           toFps(num(velEl), velUnit),
           num(psigEl),
+          tempF,
+          z,
         )
         setNum(diaEl, fromInches(diaIn, diaUnit))
       } else {
@@ -718,6 +750,8 @@ function renderGasVelocity(): void {
             toMcfd(num(rateEl), rateUnit),
             toInches(num(diaEl), diaUnit),
             toFps(num(velEl), velUnit),
+            tempF,
+            z,
           ),
         )
       }
