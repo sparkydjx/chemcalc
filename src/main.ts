@@ -979,14 +979,14 @@ function renderErosionalVelocity(): void {
       <form class="calc-form" id="form">
         ${field('Liquid specific gravity', {
           id: 'sL',
-          value: 0.85,
+          value: 1,
           min: '0',
           step: '0.01',
           unit: 'water = 1',
         })}
         ${field('Liquid rate', {
           id: 'qL',
-          value: 5000,
+          value: 500,
           min: '0',
           unit: 'Bbls/Day',
         })}
@@ -999,20 +999,20 @@ function renderErosionalVelocity(): void {
         })}
         ${field('Gas rate', {
           id: 'qG',
-          value: 2,
+          value: 2000,
           min: '0',
           step: '0.01',
           unitOptions: [
-            { value: 'MMCFD', label: 'MMCFD' },
             { value: 'MCFD', label: 'MCFD' },
+            { value: 'MMCFD', label: 'MMCFD' },
             { value: 'M3/Day', label: 'm³/Day' },
           ],
           unitId: 'qG-unit',
-          unitValue: 'MMCFD',
+          unitValue: 'MCFD',
         })}
         ${field('Pipe ID', {
           id: 'dia',
-          value: 3,
+          value: 2.441,
           min: '0',
           unitOptions: [
             { value: 'in', label: 'in' },
@@ -1034,7 +1034,7 @@ function renderErosionalVelocity(): void {
         })}
         ${field('Gas compressibility Z', {
           id: 'z',
-          value: 1,
+          value: 0.9,
           min: '0',
           step: '0.01',
           unit: '—',
