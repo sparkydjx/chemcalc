@@ -20,6 +20,11 @@ export type LenUnit = 'ft' | 'miles' | 'km'
 export type VolUnit = 'Bbls' | 'm3' | 'Gals'
 export type VelUnit = 'ft/sec' | 'm/sec'
 export type GasRateUnit = 'MCFD' | 'MMCFD' | 'M3/Day'
+/** Density units for hydrostatic liquid pressure. */
+export type DensityUnit = 'gm/mL' | 'lbs/gal' | 'lbs/cuft'
+/** Liquid column height for hydrostatic pressure. */
+export type HeightUnit = 'ft' | 'in' | 'm'
+export type PressureUnit = 'psi' | 'kPa' | 'mbar'
 
 /** Standard conditions for gas rate conversion (60 °F, 14.7 psia). */
 export const P_STD_PSIA = 14.7
@@ -286,6 +291,33 @@ export function scavengerH2sPpm(
   return numerator / denominator
 }
 
+/**
+ * Hydrostatic liquid pressure (psi) from density (lb/ft³) and height (ft).
+ * P = ρ × h / 144
+ */
+export function liquidPressurePsi(
+  densityLbPerFt3: number,
+  heightFt: number,
+): number {
+  return (densityLbPerFt3 * heightFt) / 144
+}
+
+/** Solve hydrostatic pressure for density (lb/ft³). */
+export function liquidDensityFromPressure(
+  pressurePsi: number,
+  heightFt: number,
+): number {
+  return (pressurePsi * 144) / heightFt
+}
+
+/** Solve hydrostatic pressure for liquid height (ft). */
+export function liquidHeightFromPressure(
+  pressurePsi: number,
+  densityLbPerFt3: number,
+): number {
+  return (pressurePsi * 144) / densityLbPerFt3
+}
+
 // --- unit helpers (convert UI units → formula base units / results) ---
 
 export function toInches(value: number, unit: DiaUnit): number {
@@ -340,6 +372,54 @@ export function fromMcfd(mcfd: number, unit: GasRateUnit): number {
   if (unit === 'MMCFD') return mcfd / 1000
   if (unit === 'M3/Day') return mcfd * 28.316846592
   return mcfd
+}
+
+/** 1 g/cm³ (gm/mL) → lb/ft³ */
+const LB_FT3_PER_GM_ML = 62.4279605761446
+/** US liquid gallons per cubic foot (also lb/ft³ per lb/gal). */
+const GAL_PER_FT3 = 7.48051948051948
+/** psi → kPa */
+const KPA_PER_PSI = 6.894757293168361
+/** psi → mbar */
+const MBAR_PER_PSI = 68.9475729316836
+
+/** Normalize density to lb/ft³ for the hydrostatic formula. */
+export function toLbPerFt3(value: number, unit: DensityUnit): number {
+  if (unit === 'gm/mL') return value * LB_FT3_PER_GM_ML
+  if (unit === 'lbs/gal') return value * GAL_PER_FT3
+  return value
+}
+
+export function fromLbPerFt3(lbPerFt3: number, unit: DensityUnit): number {
+  if (unit === 'gm/mL') return lbPerFt3 / LB_FT3_PER_GM_ML
+  if (unit === 'lbs/gal') return lbPerFt3 / GAL_PER_FT3
+  return lbPerFt3
+}
+
+/** Normalize liquid height to feet. */
+export function toHeightFeet(value: number, unit: HeightUnit): number {
+  if (unit === 'in') return value / 12
+  if (unit === 'm') return value / 0.3048
+  return value
+}
+
+export function fromHeightFeet(feet: number, unit: HeightUnit): number {
+  if (unit === 'in') return feet * 12
+  if (unit === 'm') return feet * 0.3048
+  return feet
+}
+
+/** Normalize pressure to psi. */
+export function toPsi(value: number, unit: PressureUnit): number {
+  if (unit === 'kPa') return value / KPA_PER_PSI
+  if (unit === 'mbar') return value / MBAR_PER_PSI
+  return value
+}
+
+export function fromPsi(psi: number, unit: PressureUnit): number {
+  if (unit === 'kPa') return psi * KPA_PER_PSI
+  if (unit === 'mbar') return psi * MBAR_PER_PSI
+  return psi
 }
 
 export function rateToGalsPerDay(value: number, unit: RateUnit): number {
