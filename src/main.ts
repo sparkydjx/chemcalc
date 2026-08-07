@@ -20,6 +20,9 @@ import {
   scavengerInjectionRate,
   scavengerGasRateMcfd,
   scavengerH2sPpm,
+  liquidPressurePsi,
+  liquidDensityFromPressure,
+  liquidHeightFromPressure,
   calculateApiRp14E,
   toInches,
   fromInches,
@@ -31,6 +34,12 @@ import {
   fromFps,
   toMcfd,
   fromMcfd,
+  toLbPerFt3,
+  fromLbPerFt3,
+  toHeightFeet,
+  fromHeightFeet,
+  toPsi,
+  fromPsi,
   rateToGalsPerDay,
   galsPerDayToRate,
   formatResult,
@@ -41,6 +50,9 @@ import {
   type VolUnit,
   type VelUnit,
   type GasRateUnit,
+  type DensityUnit,
+  type HeightUnit,
+  type PressureUnit,
 } from './calculations'
 import {
   runFullCalculation,
@@ -59,6 +71,7 @@ type CalcId =
   | 'gas-velocity'
   | 'ion-lbs'
   | 'scavenger-efficiency'
+  | 'liquid-pressure'
   | 'erosional-velocity'
   | 'multiphase'
 
@@ -92,6 +105,11 @@ const CALCS: { id: Exclude<CalcId, 'home'>; title: string; blurb: string }[] = [
     id: 'scavenger-efficiency',
     title: 'Scavenger Efficiency',
     blurb: 'H₂S, gas rate, injection, or % efficiency — solve for any',
+  },
+  {
+    id: 'liquid-pressure',
+    title: 'Liquid Pressure',
+    blurb: 'Density, liquid height, and pressure — solve for any',
   },
   {
     id: 'erosional-velocity',
@@ -972,6 +990,104 @@ function renderScavengerEfficiency(): void {
   )
 }
 
+function renderLiquidPressure(): void {
+  app.innerHTML = shell(
+    'Liquid Pressure',
+    `
+      <form class="calc-form" id="form">
+        ${field('Density', {
+          id: 'density',
+          value: 1,
+          min: '0',
+          step: '0.01',
+          unitOptions: [
+            { value: 'gm/mL', label: 'gm/mL' },
+            { value: 'lbs/gal', label: 'lbs/gal' },
+            { value: 'lbs/cuft', label: 'lbs/cuft' },
+          ],
+          unitId: 'density-unit',
+          unitValue: 'gm/mL',
+          solveKey: 'density',
+        })}
+        ${field('Liquid height', {
+          id: 'height',
+          value: 10,
+          min: '0',
+          unitOptions: [
+            { value: 'ft', label: 'ft' },
+            { value: 'in', label: 'in' },
+            { value: 'm', label: 'm' },
+          ],
+          unitId: 'height-unit',
+          unitValue: 'ft',
+          solveKey: 'height',
+        })}
+        ${field('Pressure', {
+          id: 'pressure',
+          value: '',
+          min: '0',
+          unitOptions: [
+            { value: 'psi', label: 'psi' },
+            { value: 'kPa', label: 'kPa' },
+            { value: 'mbar', label: 'mbar' },
+          ],
+          unitId: 'pressure-unit',
+          unitValue: 'psi',
+          solveKey: 'pressure',
+          solved: true,
+        })}
+      </form>
+    `,
+    true,
+  )
+  wireBack()
+  wireSolveForm(
+    'pressure',
+    [
+      'density',
+      'height',
+      'pressure',
+      'density-unit',
+      'height-unit',
+      'pressure-unit',
+    ],
+    (solveFor) => {
+      const densityEl = app.querySelector<HTMLInputElement>('#density')!
+      const heightEl = app.querySelector<HTMLInputElement>('#height')!
+      const pressureEl = app.querySelector<HTMLInputElement>('#pressure')!
+      const densityUnit = (
+        app.querySelector('#density-unit') as HTMLSelectElement
+      ).value as DensityUnit
+      const heightUnit = (
+        app.querySelector('#height-unit') as HTMLSelectElement
+      ).value as HeightUnit
+      const pressureUnit = (
+        app.querySelector('#pressure-unit') as HTMLSelectElement
+      ).value as PressureUnit
+
+      if (solveFor === 'pressure') {
+        const psi = liquidPressurePsi(
+          toLbPerFt3(num(densityEl), densityUnit),
+          toHeightFeet(num(heightEl), heightUnit),
+        )
+        setNum(pressureEl, fromPsi(psi, pressureUnit))
+      } else if (solveFor === 'density') {
+        const lbFt3 = liquidDensityFromPressure(
+          toPsi(num(pressureEl), pressureUnit),
+          toHeightFeet(num(heightEl), heightUnit),
+        )
+        setNum(densityEl, fromLbPerFt3(lbFt3, densityUnit))
+      } else {
+        const heightFt = liquidHeightFromPressure(
+          toPsi(num(pressureEl), pressureUnit),
+          toLbPerFt3(num(densityEl), densityUnit),
+        )
+        setNum(heightEl, fromHeightFeet(heightFt, heightUnit))
+      }
+    },
+  )
+}
+
 function renderErosionalVelocity(): void {
   app.innerHTML = shell(
     'Erosional Velocity',
@@ -1720,6 +1836,9 @@ function navigate(id: CalcId): void {
       break
     case 'scavenger-efficiency':
       renderScavengerEfficiency()
+      break
+    case 'liquid-pressure':
+      renderLiquidPressure()
       break
     case 'erosional-velocity':
       renderErosionalVelocity()
