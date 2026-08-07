@@ -23,6 +23,7 @@ import {
   liquidPressurePsi,
   liquidDensityFromPressure,
   liquidHeightFromPressure,
+  cylinderVolumeBbls,
   calculateApiRp14E,
   toInches,
   fromInches,
@@ -109,7 +110,7 @@ const CALCS: { id: Exclude<CalcId, 'home'>; title: string; blurb: string }[] = [
   {
     id: 'liquid-pressure',
     title: 'Liquid Pressure',
-    blurb: 'Density, liquid height, and pressure — solve for any',
+    blurb: 'Density, height, pressure, and cylinder volume — solve for any',
   },
   {
     id: 'erosional-velocity',
@@ -349,17 +350,19 @@ function wireSolveForm(
 
   const applySolveUi = () => {
     app.querySelectorAll<HTMLElement>('.field[data-field]').forEach((wrap) => {
+      const check = wrap.querySelector<HTMLInputElement>('.solve-check')
+      // Always-output fields (no Solve checkbox) keep their initial readonly state.
+      if (!check) return
       const key = wrap.dataset.field!
       const isSolved = key === solveFor
       wrap.classList.toggle('is-solved', isSolved)
       const input = wrap.querySelector<HTMLInputElement>('input.num-input')
-      const check = wrap.querySelector<HTMLInputElement>('.solve-check')
       if (input) {
         input.readOnly = isSolved
         if (isSolved) input.tabIndex = -1
         else input.removeAttribute('tabindex')
       }
-      if (check) check.checked = isSolved
+      check.checked = isSolved
     })
   }
 
@@ -1009,6 +1012,20 @@ function renderLiquidPressure(): void {
           unitValue: 'gm/mL',
           solveKey: 'density',
         })}
+        ${field('Diameter', {
+          id: 'dia',
+          value: 12,
+          min: '0',
+          unitOptions: [
+            { value: 'in', label: 'in' },
+            { value: 'ft', label: 'ft' },
+            { value: 'mm', label: 'mm' },
+            { value: 'm', label: 'm' },
+          ],
+          unitId: 'dia-unit',
+          unitValue: 'in',
+          help: 'Inside diameter of the vertical cylinder (tank or vessel). Used with liquid height to compute volume.',
+        })}
         ${field('Liquid height', {
           id: 'height',
           value: 10,
@@ -1036,6 +1053,21 @@ function renderLiquidPressure(): void {
           solveKey: 'pressure',
           solved: true,
         })}
+        ${field('Volume', {
+          id: 'vol',
+          value: '',
+          min: '0',
+          unitOptions: [
+            { value: 'Gals', label: 'Gal' },
+            { value: 'Bbls', label: 'Bbls' },
+            { value: 'L', label: 'L' },
+            { value: 'm3', label: 'm³' },
+          ],
+          unitId: 'vol-unit',
+          unitValue: 'Gals',
+          solved: true,
+          help: 'Cylinder liquid volume from diameter and liquid height.',
+        })}
       </form>
     `,
     true,
@@ -1045,25 +1077,35 @@ function renderLiquidPressure(): void {
     'pressure',
     [
       'density',
+      'dia',
       'height',
       'pressure',
+      'vol',
       'density-unit',
+      'dia-unit',
       'height-unit',
       'pressure-unit',
+      'vol-unit',
     ],
     (solveFor) => {
       const densityEl = app.querySelector<HTMLInputElement>('#density')!
+      const diaEl = app.querySelector<HTMLInputElement>('#dia')!
       const heightEl = app.querySelector<HTMLInputElement>('#height')!
       const pressureEl = app.querySelector<HTMLInputElement>('#pressure')!
+      const volEl = app.querySelector<HTMLInputElement>('#vol')!
       const densityUnit = (
         app.querySelector('#density-unit') as HTMLSelectElement
       ).value as DensityUnit
+      const diaUnit = (app.querySelector('#dia-unit') as HTMLSelectElement)
+        .value as DiaUnit
       const heightUnit = (
         app.querySelector('#height-unit') as HTMLSelectElement
       ).value as HeightUnit
       const pressureUnit = (
         app.querySelector('#pressure-unit') as HTMLSelectElement
       ).value as PressureUnit
+      const volUnit = (app.querySelector('#vol-unit') as HTMLSelectElement)
+        .value as VolUnit
 
       if (solveFor === 'pressure') {
         const psi = liquidPressurePsi(
@@ -1084,6 +1126,12 @@ function renderLiquidPressure(): void {
         )
         setNum(heightEl, fromHeightFeet(heightFt, heightUnit))
       }
+
+      const bbls = cylinderVolumeBbls(
+        toInches(num(diaEl), diaUnit),
+        toHeightFeet(num(heightEl), heightUnit),
+      )
+      setNum(volEl, fromBbls(bbls, volUnit))
     },
   )
 }

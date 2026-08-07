@@ -15,9 +15,9 @@ export type RateUnit =
 const LITERS_PER_GAL = 3.785411784
 /** US liquid gallon → quarts. */
 const QTS_PER_GAL = 4
-export type DiaUnit = 'in' | 'mm'
+export type DiaUnit = 'in' | 'ft' | 'mm' | 'm'
 export type LenUnit = 'ft' | 'miles' | 'km'
-export type VolUnit = 'Bbls' | 'm3' | 'Gals'
+export type VolUnit = 'Bbls' | 'm3' | 'Gals' | 'L'
 export type VelUnit = 'ft/sec' | 'm/sec'
 export type GasRateUnit = 'MCFD' | 'MMCFD' | 'M3/Day'
 /** Density units for hydrostatic liquid pressure. */
@@ -53,6 +53,14 @@ export function dosageBblsPerDay(galsPerDay: number, targetPpm: number): number 
 /** Line ID (in) + length (ft) → displacement volume (bbls). */
 export function displacementBbls(diameterIn: number, lengthFt: number): number {
   return (diameterIn / 24) ** 2 * lengthFt * 7.4805 / 42 * PI
+}
+
+/**
+ * Vertical cylinder volume (bbls) from inside diameter (in) and liquid height (ft).
+ * Same geometry as line displacement: V = π (D/24)² h × (gal/ft³) / 42.
+ */
+export function cylinderVolumeBbls(diameterIn: number, heightFt: number): number {
+  return displacementBbls(diameterIn, heightFt)
 }
 
 /** Solve displacement for diameter (in). */
@@ -321,11 +329,17 @@ export function liquidHeightFromPressure(
 // --- unit helpers (convert UI units → formula base units / results) ---
 
 export function toInches(value: number, unit: DiaUnit): number {
-  return unit === 'mm' ? value / 25.4 : value
+  if (unit === 'mm') return value / 25.4
+  if (unit === 'ft') return value * 12
+  if (unit === 'm') return value / 0.0254
+  return value
 }
 
 export function fromInches(inches: number, unit: DiaUnit): number {
-  return unit === 'mm' ? inches * 25.4 : inches
+  if (unit === 'mm') return inches * 25.4
+  if (unit === 'ft') return inches / 12
+  if (unit === 'm') return inches * 0.0254
+  return inches
 }
 
 export function toFeet(value: number, unit: LenUnit): number {
@@ -343,12 +357,14 @@ export function fromFeet(feet: number, unit: LenUnit): number {
 export function toBbls(value: number, unit: VolUnit): number {
   if (unit === 'm3') return value / 0.1589872949
   if (unit === 'Gals') return value / 42
+  if (unit === 'L') return value / (42 * LITERS_PER_GAL)
   return value
 }
 
 export function fromBbls(bbls: number, unit: VolUnit): number {
   if (unit === 'm3') return bbls * 0.1589872949
   if (unit === 'Gals') return bbls * 42
+  if (unit === 'L') return bbls * 42 * LITERS_PER_GAL
   return bbls
 }
 
