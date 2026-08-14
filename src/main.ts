@@ -39,6 +39,7 @@ import {
   fromMcfd,
   toLbPerFt3,
   fromLbPerFt3,
+  toGasDensityLbPerFt3,
   toHeightFeet,
   fromHeightFeet,
   toPsi,
@@ -54,6 +55,7 @@ import {
   type VelUnit,
   type GasRateUnit,
   type DensityUnit,
+  type GasDensityUnit,
   type HeightUnit,
   type PressureUnit,
   type CylinderOrientation,
@@ -1545,13 +1547,13 @@ function renderMultiphase(): void {
     `
       <form class="calc-form" id="form">
         ${sectionTitle('Inputs')}
-        ${field('Tubing ID', {
+        ${field('Pipe ID', {
           id: 'tubing-id',
           value: 3,
           min: '0',
           step: '0.01',
           unit: 'in',
-          help: 'Inside diameter of the tubing or pipe the fluids flow through.',
+          help: 'Inside diameter of the pipe the fluids flow through.',
         })}
         ${field('Liquid rate', {
           id: 'liq-rate',
@@ -1562,7 +1564,7 @@ function renderMultiphase(): void {
         })}
         ${field('Gas rate (standard)', {
           id: 'gas-rate',
-          value: 2,
+          value: 2000,
           min: '0',
           step: '0.01',
           unitOptions: [
@@ -1571,7 +1573,7 @@ function renderMultiphase(): void {
             { value: 'ft3/s', label: 'ft³/s' },
           ],
           unitId: 'gas-rate-unit',
-          unitValue: 'MMCFD',
+          unitValue: 'MCFD',
           help: 'Gas volume rate at standard conditions (14.7 psia, 60 °F). Choose MCFD, MMSCFD, or ft³/s.',
         })}
         ${field('Pressure', {
@@ -1606,16 +1608,27 @@ function renderMultiphase(): void {
           id: 'rho-l',
           value: 55,
           min: '0',
-          unit: 'lbm/ft³',
-          help: 'Mass per unit volume of the liquid phase.',
+          unitOptions: [
+            { value: 'lbs/cuft', label: 'lbs/cuft' },
+            { value: 'lbs/gal', label: 'lbs/gal' },
+            { value: 'gm/mL', label: 'gm/mL' },
+          ],
+          unitId: 'rho-l-unit',
+          unitValue: 'lbs/cuft',
+          help: 'Mass per unit volume of the liquid phase. Choose lbs/cuft, lbs/gal, or gm/mL.',
         })}
         ${field('Gas density', {
           id: 'rho-g',
           value: 3,
           min: '0',
           step: '0.01',
-          unit: 'lbm/ft³',
-          help: 'Mass per unit volume of the gas phase at local (in-situ) conditions.',
+          unitOptions: [
+            { value: 'lbm/ft3', label: 'lbm/ft³' },
+            { value: 'sg', label: 'air = 1' },
+          ],
+          unitId: 'rho-g-unit',
+          unitValue: 'lbm/ft3',
+          help: 'In-situ mass per unit volume of the gas phase, or specific gravity relative to air. Gravity (air = 1) is converted to in-situ density using pressure, temperature, and Z.',
         })}
         ${field('Interfacial tension', {
           id: 'sigma',
@@ -1835,7 +1848,9 @@ function renderMultiphase(): void {
       'temp-f',
       'z',
       'rho-l',
+      'rho-l-unit',
       'rho-g',
+      'rho-g-unit',
       'sigma',
       'mu-l',
       'mu-g',
@@ -1897,24 +1912,38 @@ function renderMultiphase(): void {
         return
       }
 
-      const inputs: WellInputs = {
-        tubingIdIn,
-        liquidRateFt3PerS: bblPerDayToFt3PerS(liqBblDay),
-        gasRateFt3PerS,
-        liquidDensityLbmFt3: num(app.querySelector<HTMLInputElement>('#rho-l')!),
-        gasDensityLbmFt3: num(app.querySelector<HTMLInputElement>('#rho-g')!),
-        interfacialTensionDyneCm: num(
-          app.querySelector<HTMLInputElement>('#sigma')!,
-        ),
-        liquidViscosityCp: num(app.querySelector<HTMLInputElement>('#mu-l')!),
-        gasViscosityCp: num(app.querySelector<HTMLInputElement>('#mu-g')!),
-        pipeRoughnessIn: num(
-          app.querySelector<HTMLInputElement>('#roughness')!,
-        ),
-      }
-      const cFactor = num(app.querySelector<HTMLInputElement>('#c-factor')!)
-
       try {
+        const liquidDensityUnit = (
+          app.querySelector('#rho-l-unit') as HTMLSelectElement
+        ).value as DensityUnit
+        const gasDensityUnit = (
+          app.querySelector('#rho-g-unit') as HTMLSelectElement
+        ).value as GasDensityUnit
+        const inputs: WellInputs = {
+          tubingIdIn,
+          liquidRateFt3PerS: bblPerDayToFt3PerS(liqBblDay),
+          gasRateFt3PerS,
+          liquidDensityLbmFt3: toLbPerFt3(
+            num(app.querySelector<HTMLInputElement>('#rho-l')!),
+            liquidDensityUnit,
+          ),
+          gasDensityLbmFt3: toGasDensityLbPerFt3(
+            num(app.querySelector<HTMLInputElement>('#rho-g')!),
+            gasDensityUnit,
+            psia,
+            tempF,
+            zFactor,
+          ),
+          interfacialTensionDyneCm: num(
+            app.querySelector<HTMLInputElement>('#sigma')!,
+          ),
+          liquidViscosityCp: num(app.querySelector<HTMLInputElement>('#mu-l')!),
+          gasViscosityCp: num(app.querySelector<HTMLInputElement>('#mu-g')!),
+          pipeRoughnessIn: num(
+            app.querySelector<HTMLInputElement>('#roughness')!,
+          ),
+        }
+        const cFactor = num(app.querySelector<HTMLInputElement>('#c-factor')!)
         const result = runFullCalculation(inputs, {
           erosionalCFactor: cFactor,
         })

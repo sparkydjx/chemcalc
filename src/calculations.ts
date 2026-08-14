@@ -22,6 +22,8 @@ export type VelUnit = 'ft/sec' | 'm/sec'
 export type GasRateUnit = 'MCFD' | 'MMCFD' | 'M3/Day'
 /** Density units for hydrostatic liquid pressure. */
 export type DensityUnit = 'gm/mL' | 'lbs/gal' | 'lbs/cuft'
+/** Gas density as in-situ mass/volume, or specific gravity relative to air. */
+export type GasDensityUnit = 'lbm/ft3' | 'sg'
 /** Liquid column height for hydrostatic pressure. */
 export type HeightUnit = 'ft' | 'in' | 'm'
 export type PressureUnit = 'psi' | 'kPa' | 'mbar'
@@ -494,6 +496,37 @@ export function fromLbPerFt3(lbPerFt3: number, unit: DensityUnit): number {
   if (unit === 'gm/mL') return lbPerFt3 / LB_FT3_PER_GM_ML
   if (unit === 'lbs/gal') return lbPerFt3 / GAL_PER_FT3
   return lbPerFt3
+}
+
+/**
+ * Oilfield real-gas factor in ρ (lb/ft³) = 2.7 × SG × P / (Z × T_R).
+ * 2.7 ≈ MW_air / R (28.97 / 10.7316), same coefficient as API RP 14E.
+ */
+const GAS_DENSITY_SG_FACTOR = 2.7
+
+/**
+ * Normalize gas density to in-situ lb/ft³.
+ * Specific gravity (air = 1) is converted with local P, T, and Z:
+ *   ρ = 2.7 × SG × P_psia / (Z × (°F + 460))
+ */
+export function toGasDensityLbPerFt3(
+  value: number,
+  unit: GasDensityUnit,
+  pressurePsia: number,
+  temperatureF: number,
+  gasCompressibilityZ: number,
+): number {
+  if (unit !== 'sg') return value
+  const tRankine = temperatureF + 460
+  if (pressurePsia <= 0 || tRankine <= 0 || gasCompressibilityZ <= 0) {
+    throw new Error(
+      'Pressure, temperature, and Z must be positive to convert gas gravity to density.',
+    )
+  }
+  return (
+    (GAS_DENSITY_SG_FACTOR * value * pressurePsia) /
+    (gasCompressibilityZ * tRankine)
+  )
 }
 
 /** Normalize liquid height to feet. */
