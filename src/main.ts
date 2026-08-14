@@ -112,7 +112,7 @@ const CALCS: { id: Exclude<CalcId, 'home'>; title: string; blurb: string }[] = [
   },
   {
     id: 'liquid-pressure',
-    title: 'Liquid Pressure',
+    title: 'Tank Volume',
     blurb: 'Density, height, pressure, cylinder volume, and valve offset',
   },
   {
@@ -998,7 +998,7 @@ function renderScavengerEfficiency(): void {
 
 function renderLiquidPressure(): void {
   app.innerHTML = shell(
-    'Liquid Pressure',
+    'Tank Volume',
     `
       <form class="calc-form" id="form">
         ${field('Density', {
