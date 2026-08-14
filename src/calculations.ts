@@ -119,6 +119,34 @@ export function cylinderVolumeAboveOffsetBbls(
   return net > 0 ? net : 0
 }
 
+/**
+ * Hydrostatic head (ft) of liquid above a valve offset.
+ * Returns 0 when the liquid surface is at or below the valve.
+ */
+export function headAboveValveFt(heightFt: number, offsetFt: number): number {
+  const offset = Number.isFinite(offsetFt) && offsetFt > 0 ? offsetFt : 0
+  const head = heightFt - offset
+  return head > 0 ? head : 0
+}
+
+/**
+ * Max liquid height the user may enter (ft): diameter − valve offset.
+ * Horizontal only — diameter is the geometric fill limit. Vertical is uncapped.
+ * Offset ≥ diameter → max height is 0.
+ */
+export function maxCylinderLiquidHeightFt(
+  orientation: CylinderOrientation,
+  diameterIn: number,
+  offsetFt = 0,
+): number {
+  if (orientation !== 'horizontal') return Number.POSITIVE_INFINITY
+  if (!(diameterIn > 0)) return 0
+  const diameterFt = diameterIn / 12
+  const offset = Number.isFinite(offsetFt) && offsetFt > 0 ? offsetFt : 0
+  const maxHeight = diameterFt - offset
+  return maxHeight > 0 ? maxHeight : 0
+}
+
 /** Solve displacement for diameter (in). */
 export function displacementDiameterIn(bbls: number, lengthFt: number): number {
   return 24 * Math.sqrt(bbls / (lengthFt * 7.4805 / 42 * PI))

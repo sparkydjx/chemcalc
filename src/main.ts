@@ -24,6 +24,8 @@ import {
   liquidDensityFromPressure,
   liquidHeightFromPressure,
   cylinderVolumeAboveOffsetBbls,
+  headAboveValveFt,
+  maxCylinderLiquidHeightFt,
   calculateApiRp14E,
   toInches,
   fromInches,
@@ -1059,7 +1061,7 @@ function renderLiquidPressure(): void {
         })}
         ${field('Liquid height', {
           id: 'height',
-          value: 10,
+          value: 20,
           min: '0',
           unitOptions: [
             { value: 'ft', label: 'ft' },
@@ -1067,13 +1069,13 @@ function renderLiquidPressure(): void {
             { value: 'm', label: 'm' },
           ],
           unitId: 'height-unit',
-          unitValue: 'ft',
+          unitValue: 'in',
           solveKey: 'height',
-          help: 'Liquid column height for hydrostatic pressure. For horizontal cylinders this is also the fill height from the bottom (0 to diameter).',
+          help: 'Liquid fill height from the tank bottom. Pressure is taken at the valve: head = liquid height − valve offset (e.g. 20 in − 2 in → 18 in of fluid). For horizontal cylinders, you cannot enter a height greater than diameter − valve offset.',
         })}
         ${field('Valve offset', {
           id: 'offset',
-          value: 0,
+          value: 2,
           min: '0',
           unitOptions: [
             { value: 'in', label: 'in' },
@@ -1082,7 +1084,20 @@ function renderLiquidPressure(): void {
           ],
           unitId: 'offset-unit',
           unitValue: 'in',
-          help: 'Height of the outlet valve above the tank bottom. Subtracts the unusable (dead) volume below the valve from the reported volume. Leave 0 if the valve is at the bottom. Does not change hydrostatic pressure, which still uses liquid height.',
+          help: 'Height of the outlet valve above the tank bottom. Pressure uses only the fluid above this point. Volume subtracts the dead space below the valve. Leave 0 if the valve is at the bottom.',
+        })}
+        ${field('Head above valve', {
+          id: 'head',
+          value: '',
+          unitOptions: [
+            { value: 'in', label: 'in' },
+            { value: 'ft', label: 'ft' },
+            { value: 'm', label: 'm' },
+          ],
+          unitId: 'head-unit',
+          unitValue: 'in',
+          solved: true,
+          help: 'Liquid height minus valve offset — the fluid column used for hydrostatic pressure. Example: 20 in of liquid and a 2 in valve offset → 18 in of head.',
         })}
         ${field('Pressure', {
           id: 'pressure',
@@ -1097,6 +1112,7 @@ function renderLiquidPressure(): void {
           unitValue: 'psi',
           solveKey: 'pressure',
           solved: true,
+          help: 'Hydrostatic pressure of the fluid above the valve (P = ρ × head / 144). With 20 in of liquid and a 2 in offset, pressure is based on 18 in of fluid, not 20 in.',
         })}
         ${field('Volume', {
           id: 'vol',
@@ -1139,6 +1155,7 @@ function renderLiquidPressure(): void {
       'len',
       'height',
       'offset',
+      'head',
       'pressure',
       'vol',
       'density-unit',
@@ -1146,6 +1163,7 @@ function renderLiquidPressure(): void {
       'len-unit',
       'height-unit',
       'offset-unit',
+      'head-unit',
       'pressure-unit',
       'vol-unit',
     ],
@@ -1155,6 +1173,7 @@ function renderLiquidPressure(): void {
       const lenEl = app.querySelector<HTMLInputElement>('#len')!
       const heightEl = app.querySelector<HTMLInputElement>('#height')!
       const offsetEl = app.querySelector<HTMLInputElement>('#offset')!
+      const headEl = app.querySelector<HTMLInputElement>('#head')!
       const pressureEl = app.querySelector<HTMLInputElement>('#pressure')!
       const volEl = app.querySelector<HTMLInputElement>('#vol')!
       const densityUnit = (
@@ -1170,6 +1189,8 @@ function renderLiquidPressure(): void {
       const offsetUnit = (
         app.querySelector('#offset-unit') as HTMLSelectElement
       ).value as HeightUnit
+      const headUnit = (app.querySelector('#head-unit') as HTMLSelectElement)
+        .value as HeightUnit
       const pressureUnit = (
         app.querySelector('#pressure-unit') as HTMLSelectElement
       ).value as PressureUnit
@@ -1177,33 +1198,88 @@ function renderLiquidPressure(): void {
         .value as VolUnit
       const orientation = orientationEl.value as CylinderOrientation
 
-      if (solveFor === 'pressure') {
-        const psi = liquidPressurePsi(
-          toLbPerFt3(num(densityEl), densityUnit),
-          toHeightFeet(num(heightEl), heightUnit),
-        )
-        setNum(pressureEl, fromPsi(psi, pressureUnit))
-      } else if (solveFor === 'density') {
-        const lbFt3 = liquidDensityFromPressure(
-          toPsi(num(pressureEl), pressureUnit),
-          toHeightFeet(num(heightEl), heightUnit),
-        )
-        setNum(densityEl, fromLbPerFt3(lbFt3, densityUnit))
-      } else {
-        const heightFt = liquidHeightFromPressure(
-          toPsi(num(pressureEl), pressureUnit),
-          toLbPerFt3(num(densityEl), densityUnit),
-        )
-        setNum(heightEl, fromHeightFeet(heightFt, heightUnit))
-      }
-
       const diaIn = toInches(num(diaEl), diaUnit)
-      const heightFt = toHeightFeet(num(heightEl), heightUnit)
+      const diameterFt = diaIn / 12
       const offsetRaw = num(offsetEl)
-      const offsetFt =
+      let offsetFt =
         Number.isFinite(offsetRaw) && offsetRaw > 0
           ? toHeightFeet(offsetRaw, offsetUnit)
           : 0
+      // Horizontal: valve cannot sit above the top of the cylinder.
+      if (
+        orientation === 'horizontal' &&
+        diameterFt > 0 &&
+        offsetFt > diameterFt
+      ) {
+        offsetFt = diameterFt
+        setNum(offsetEl, fromHeightFeet(offsetFt, offsetUnit))
+      }
+      // Max liquid height input = diameter − valve offset (horizontal only).
+      const maxHeightFt = maxCylinderLiquidHeightFt(
+        orientation,
+        diaIn,
+        offsetFt,
+      )
+
+      let heightFt = toHeightFeet(num(heightEl), heightUnit)
+
+      /** Keep the liquid-height cell from exceeding diameter − offset. */
+      const clampHeightInput = () => {
+        if (!Number.isFinite(maxHeightFt)) return
+        if (!(heightFt > maxHeightFt)) return
+        heightFt = maxHeightFt
+        // Always write back so the typed value cannot stay above the max.
+        if (solveFor !== 'height') {
+          setNum(heightEl, fromHeightFeet(heightFt, heightUnit))
+        }
+      }
+
+      if (solveFor === 'pressure') {
+        clampHeightInput()
+        const headFt = headAboveValveFt(heightFt, offsetFt)
+        setNum(headEl, fromHeightFeet(headFt, headUnit))
+        const psi = liquidPressurePsi(
+          toLbPerFt3(num(densityEl), densityUnit),
+          headFt,
+        )
+        setNum(pressureEl, fromPsi(psi, pressureUnit))
+      } else if (solveFor === 'density') {
+        clampHeightInput()
+        const headFt = headAboveValveFt(heightFt, offsetFt)
+        setNum(headEl, fromHeightFeet(headFt, headUnit))
+        if (headFt <= 0) {
+          densityEl.value = ''
+        } else {
+          const lbFt3 = liquidDensityFromPressure(
+            toPsi(num(pressureEl), pressureUnit),
+            headFt,
+          )
+          setNum(densityEl, fromLbPerFt3(lbFt3, densityUnit))
+        }
+      } else {
+        // Solve for liquid height from bottom = valve offset + head from P/ρ.
+        const headFt = liquidHeightFromPressure(
+          toPsi(num(pressureEl), pressureUnit),
+          toLbPerFt3(num(densityEl), densityUnit),
+        )
+        setNum(headEl, fromHeightFeet(headFt > 0 ? headFt : 0, headUnit))
+        heightFt = offsetFt + (headFt > 0 ? headFt : 0)
+        if (Number.isFinite(maxHeightFt) && heightFt > maxHeightFt) {
+          heightFt = maxHeightFt
+        }
+        setNum(heightEl, fromHeightFeet(heightFt, heightUnit))
+      }
+
+      // Re-read after solve/clamp and enforce the input max once more.
+      heightFt = toHeightFeet(num(heightEl), heightUnit)
+      if (Number.isFinite(maxHeightFt) && heightFt > maxHeightFt) {
+        heightFt = maxHeightFt
+        setNum(heightEl, fromHeightFeet(heightFt, heightUnit))
+      }
+
+      const headFt = headAboveValveFt(heightFt, offsetFt)
+      setNum(headEl, fromHeightFeet(headFt, headUnit))
+
       const lengthFt = toHeightFeet(num(lenEl), lenUnit)
       const bbls = cylinderVolumeAboveOffsetBbls(
         orientation,
