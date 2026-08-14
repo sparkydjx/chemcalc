@@ -75,7 +75,7 @@ type CalcId =
   | 'gas-velocity'
   | 'ion-lbs'
   | 'scavenger-efficiency'
-  | 'tank-volume'
+  | 'liquid-pressure'
   | 'erosional-velocity'
   | 'multiphase'
 
@@ -111,7 +111,7 @@ const CALCS: { id: Exclude<CalcId, 'home'>; title: string; blurb: string }[] = [
     blurb: 'H₂S, gas rate, injection, or % efficiency — solve for any',
   },
   {
-    id: 'tank-volume',
+    id: 'liquid-pressure',
     title: 'Tank Volume',
     blurb: 'Density, height, pressure, cylinder volume, and valve offset',
   },
@@ -996,7 +996,7 @@ function renderScavengerEfficiency(): void {
   )
 }
 
-function renderTankVolume(): void {
+function renderLiquidPressure(): void {
   app.innerHTML = shell(
     'Tank Volume',
     `
@@ -2042,8 +2042,8 @@ function navigate(id: CalcId): void {
     case 'scavenger-efficiency':
       renderScavengerEfficiency()
       break
-    case 'tank-volume':
-      renderTankVolume()
+    case 'liquid-pressure':
+      renderLiquidPressure()
       break
     case 'erosional-velocity':
       renderErosionalVelocity()
@@ -2057,8 +2057,7 @@ function navigate(id: CalcId): void {
 }
 
 function routeFromHash(): void {
-  const raw = location.hash.replace(/^#/, '')
-  const hash = (raw === 'liquid-pressure' ? 'tank-volume' : raw) as CalcId | ''
+  const hash = location.hash.replace(/^#/, '') as CalcId | ''
   const known = CALCS.some((c) => c.id === hash)
   navigate(known ? (hash as CalcId) : 'home')
 }
