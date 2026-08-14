@@ -75,7 +75,7 @@ type CalcId =
   | 'gas-velocity'
   | 'ion-lbs'
   | 'scavenger-efficiency'
-  | 'liquid-pressure'
+  | 'tank-volume'
   | 'erosional-velocity'
   | 'multiphase'
 
@@ -111,9 +111,9 @@ const CALCS: { id: Exclude<CalcId, 'home'>; title: string; blurb: string }[] = [
     blurb: 'H₂S, gas rate, injection, or % efficiency — solve for any',
   },
   {
-    id: 'liquid-pressure',
-    title: 'Liquid Pressure',
-    blurb: 'Density, height, pressure, cylinder volume, and valve offset',
+    id: 'tank-volume',
+    title: 'Tank Volume',
+    blurb: 'Cylinder volume, liquid height, density, pressure, and valve offset',
   },
   {
     id: 'erosional-velocity',
@@ -996,9 +996,9 @@ function renderScavengerEfficiency(): void {
   )
 }
 
-function renderLiquidPressure(): void {
+function renderTankVolume(): void {
   app.innerHTML = shell(
-    'Liquid Pressure',
+    'Tank Volume',
     `
       <form class="calc-form" id="form">
         ${field('Density', {
@@ -2042,8 +2042,8 @@ function navigate(id: CalcId): void {
     case 'scavenger-efficiency':
       renderScavengerEfficiency()
       break
-    case 'liquid-pressure':
-      renderLiquidPressure()
+    case 'tank-volume':
+      renderTankVolume()
       break
     case 'erosional-velocity':
       renderErosionalVelocity()
@@ -2057,7 +2057,8 @@ function navigate(id: CalcId): void {
 }
 
 function routeFromHash(): void {
-  const hash = location.hash.replace(/^#/, '') as CalcId | ''
+  let hash = location.hash.replace(/^#/, '')
+  if (hash === 'liquid-pressure') hash = 'tank-volume'
   const known = CALCS.some((c) => c.id === hash)
   navigate(known ? (hash as CalcId) : 'home')
 }
