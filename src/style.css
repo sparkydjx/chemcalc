@@ -169,6 +169,10 @@ body {
   transition: background 0.15s ease;
 }
 
+.field[hidden] {
+  display: none;
+}
+
 .field-header {
   display: flex;
   align-items: center;
