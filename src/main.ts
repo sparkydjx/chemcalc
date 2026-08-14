@@ -1071,7 +1071,7 @@ function renderLiquidPressure(): void {
           unitId: 'height-unit',
           unitValue: 'ft',
           solveKey: 'height',
-          help: 'Liquid fill height from the tank bottom. Pressure and usable volume use the head above the valve (liquid height − valve offset). For horizontal cylinders, height cannot exceed the diameter.',
+          help: 'Liquid fill height from the tank bottom. Pressure and usable volume use the head above the valve (liquid height − valve offset). For horizontal cylinders, you cannot enter a height greater than diameter − valve offset.',
         })}
         ${field('Valve offset', {
           id: 'offset',
@@ -1084,7 +1084,7 @@ function renderLiquidPressure(): void {
           ],
           unitId: 'offset-unit',
           unitValue: 'in',
-          help: 'Height of the outlet valve above the tank bottom. Subtracts dead volume below the valve and reduces hydrostatic pressure to the fluid head above the valve. Leave 0 if the valve is at the bottom. For horizontal tanks, fluid head above the valve cannot exceed diameter − offset.',
+          help: 'Height of the outlet valve above the tank bottom. Subtracts dead volume below the valve and reduces hydrostatic pressure to the fluid head above the valve. Leave 0 if the valve is at the bottom. On horizontal tanks, liquid height is capped at diameter − offset.',
         })}
         ${field('Pressure', {
           id: 'pressure',
@@ -1180,25 +1180,43 @@ function renderLiquidPressure(): void {
       const orientation = orientationEl.value as CylinderOrientation
 
       const diaIn = toInches(num(diaEl), diaUnit)
+      const diameterFt = diaIn / 12
       const offsetRaw = num(offsetEl)
       let offsetFt =
         Number.isFinite(offsetRaw) && offsetRaw > 0
           ? toHeightFeet(offsetRaw, offsetUnit)
           : 0
-      const maxHeightFt = maxCylinderLiquidHeightFt(orientation, diaIn)
       // Horizontal: valve cannot sit above the top of the cylinder.
-      if (Number.isFinite(maxHeightFt) && offsetFt > maxHeightFt) {
-        offsetFt = maxHeightFt
+      if (
+        orientation === 'horizontal' &&
+        diameterFt > 0 &&
+        offsetFt > diameterFt
+      ) {
+        offsetFt = diameterFt
         setNum(offsetEl, fromHeightFeet(offsetFt, offsetUnit))
       }
+      // Max liquid height input = diameter − valve offset (horizontal only).
+      const maxHeightFt = maxCylinderLiquidHeightFt(
+        orientation,
+        diaIn,
+        offsetFt,
+      )
 
       let heightFt = toHeightFeet(num(heightEl), heightUnit)
 
-      if (solveFor === 'pressure') {
-        if (Number.isFinite(maxHeightFt) && heightFt > maxHeightFt) {
-          heightFt = maxHeightFt
+      /** Keep the liquid-height cell from exceeding diameter − offset. */
+      const clampHeightInput = () => {
+        if (!Number.isFinite(maxHeightFt)) return
+        if (!(heightFt > maxHeightFt)) return
+        heightFt = maxHeightFt
+        // Always write back so the typed value cannot stay above the max.
+        if (solveFor !== 'height') {
           setNum(heightEl, fromHeightFeet(heightFt, heightUnit))
         }
+      }
+
+      if (solveFor === 'pressure') {
+        clampHeightInput()
         const headFt = headAboveValveFt(heightFt, offsetFt)
         const psi = liquidPressurePsi(
           toLbPerFt3(num(densityEl), densityUnit),
@@ -1206,10 +1224,7 @@ function renderLiquidPressure(): void {
         )
         setNum(pressureEl, fromPsi(psi, pressureUnit))
       } else if (solveFor === 'density') {
-        if (Number.isFinite(maxHeightFt) && heightFt > maxHeightFt) {
-          heightFt = maxHeightFt
-          setNum(heightEl, fromHeightFeet(heightFt, heightUnit))
-        }
+        clampHeightInput()
         const headFt = headAboveValveFt(heightFt, offsetFt)
         if (headFt <= 0) {
           densityEl.value = ''
@@ -1233,13 +1248,11 @@ function renderLiquidPressure(): void {
         setNum(heightEl, fromHeightFeet(heightFt, heightUnit))
       }
 
-      // Re-read height after any clamp / solve update.
+      // Re-read after solve/clamp and enforce the input max once more.
       heightFt = toHeightFeet(num(heightEl), heightUnit)
       if (Number.isFinite(maxHeightFt) && heightFt > maxHeightFt) {
         heightFt = maxHeightFt
-        if (solveFor !== 'height') {
-          setNum(heightEl, fromHeightFeet(heightFt, heightUnit))
-        }
+        setNum(heightEl, fromHeightFeet(heightFt, heightUnit))
       }
 
       const lengthFt = toHeightFeet(num(lenEl), lenUnit)

@@ -130,33 +130,21 @@ export function headAboveValveFt(heightFt: number, offsetFt: number): number {
 }
 
 /**
- * Max liquid fill height from the tank bottom (ft).
- * Horizontal: diameter (so head above the valve ≤ diameter − offset).
- * Vertical: no geometric cap (Infinity).
+ * Max liquid height the user may enter (ft): diameter − valve offset.
+ * Horizontal only — diameter is the geometric fill limit. Vertical is uncapped.
+ * Offset ≥ diameter → max height is 0.
  */
 export function maxCylinderLiquidHeightFt(
   orientation: CylinderOrientation,
   diameterIn: number,
+  offsetFt = 0,
 ): number {
   if (orientation !== 'horizontal') return Number.POSITIVE_INFINITY
   if (!(diameterIn > 0)) return 0
-  return diameterIn / 12
-}
-
-/**
- * Max fluid head above the valve (ft): diameter − offset for horizontal
- * cylinders; unlimited for vertical.
- */
-export function maxHeadAboveValveFt(
-  orientation: CylinderOrientation,
-  diameterIn: number,
-  offsetFt: number,
-): number {
-  const maxHeight = maxCylinderLiquidHeightFt(orientation, diameterIn)
-  if (!Number.isFinite(maxHeight)) return Number.POSITIVE_INFINITY
+  const diameterFt = diameterIn / 12
   const offset = Number.isFinite(offsetFt) && offsetFt > 0 ? offsetFt : 0
-  const maxHead = maxHeight - offset
-  return maxHead > 0 ? maxHead : 0
+  const maxHeight = diameterFt - offset
+  return maxHeight > 0 ? maxHeight : 0
 }
 
 /** Solve displacement for diameter (in). */
