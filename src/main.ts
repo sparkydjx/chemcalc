@@ -24,6 +24,7 @@ import {
   liquidDensityFromPressure,
   liquidHeightFromPressure,
   cylinderVolumeBbls,
+  horizontalCylinderVolumeBbls,
   calculateApiRp14E,
   toInches,
   fromInches,
@@ -54,6 +55,7 @@ import {
   type DensityUnit,
   type HeightUnit,
   type PressureUnit,
+  type CylinderOrientation,
 } from './calculations'
 import {
   runFullCalculation,
@@ -110,7 +112,7 @@ const CALCS: { id: Exclude<CalcId, 'home'>; title: string; blurb: string }[] = [
   {
     id: 'liquid-pressure',
     title: 'Liquid Pressure',
-    blurb: 'Density, height, pressure, and cylinder volume — solve for any',
+    blurb: 'Density, height, pressure, and vertical/horizontal cylinder volume',
   },
   {
     id: 'erosional-velocity',
@@ -1012,6 +1014,23 @@ function renderLiquidPressure(): void {
           unitValue: 'gm/mL',
           solveKey: 'density',
         })}
+        <div class="field" data-field="orientation">
+          <div class="field-header">
+            <span class="field-label-row">
+              <span class="field-label">Cylinder orientation</span>
+              ${helpLink(
+                'Cylinder orientation',
+                'Vertical: volume from diameter and liquid height. Horizontal: volume from diameter, cylinder length, and liquid fill height (partial circle cross-section).',
+              )}
+            </span>
+          </div>
+          <span class="field-controls">
+            <select id="orientation" aria-label="Cylinder orientation">
+              <option value="vertical" selected>Vertical</option>
+              <option value="horizontal">Horizontal</option>
+            </select>
+          </span>
+        </div>
         ${field('Diameter', {
           id: 'dia',
           value: 12,
@@ -1024,7 +1043,20 @@ function renderLiquidPressure(): void {
           ],
           unitId: 'dia-unit',
           unitValue: 'in',
-          help: 'Inside diameter of the vertical cylinder (tank or vessel). Used with liquid height to compute volume.',
+          help: 'Inside diameter of the cylinder (tank or vessel). Used with liquid height (and length when horizontal) to compute volume.',
+        })}
+        ${field('Cylinder length', {
+          id: 'len',
+          value: 20,
+          min: '0',
+          unitOptions: [
+            { value: 'ft', label: 'ft' },
+            { value: 'in', label: 'in' },
+            { value: 'm', label: 'm' },
+          ],
+          unitId: 'len-unit',
+          unitValue: 'ft',
+          help: 'Axial length of the horizontal cylinder. Not used for vertical tanks.',
         })}
         ${field('Liquid height', {
           id: 'height',
@@ -1038,6 +1070,7 @@ function renderLiquidPressure(): void {
           unitId: 'height-unit',
           unitValue: 'ft',
           solveKey: 'height',
+          help: 'Liquid column height for hydrostatic pressure. For horizontal cylinders this is also the fill height from the bottom (0 to diameter).',
         })}
         ${field('Pressure', {
           id: 'pressure',
@@ -1066,23 +1099,38 @@ function renderLiquidPressure(): void {
           unitId: 'vol-unit',
           unitValue: 'Gals',
           solved: true,
-          help: 'Cylinder liquid volume from diameter and liquid height.',
+          help: 'Liquid volume in the cylinder. Vertical uses π r² h; horizontal uses the partial-circle fill formula.',
         })}
       </form>
     `,
     true,
   )
   wireBack()
+  wireFieldHelp()
+
+  const lenField = app.querySelector<HTMLElement>('.field[data-field="len"]')!
+  const orientationEl = app.querySelector<HTMLSelectElement>('#orientation')!
+
+  const applyOrientationUi = () => {
+    const horizontal = orientationEl.value === 'horizontal'
+    lenField.hidden = !horizontal
+  }
+  applyOrientationUi()
+  orientationEl.addEventListener('change', applyOrientationUi)
+
   wireSolveForm(
     'pressure',
     [
       'density',
+      'orientation',
       'dia',
+      'len',
       'height',
       'pressure',
       'vol',
       'density-unit',
       'dia-unit',
+      'len-unit',
       'height-unit',
       'pressure-unit',
       'vol-unit',
@@ -1090,6 +1138,7 @@ function renderLiquidPressure(): void {
     (solveFor) => {
       const densityEl = app.querySelector<HTMLInputElement>('#density')!
       const diaEl = app.querySelector<HTMLInputElement>('#dia')!
+      const lenEl = app.querySelector<HTMLInputElement>('#len')!
       const heightEl = app.querySelector<HTMLInputElement>('#height')!
       const pressureEl = app.querySelector<HTMLInputElement>('#pressure')!
       const volEl = app.querySelector<HTMLInputElement>('#vol')!
@@ -1098,6 +1147,8 @@ function renderLiquidPressure(): void {
       ).value as DensityUnit
       const diaUnit = (app.querySelector('#dia-unit') as HTMLSelectElement)
         .value as DiaUnit
+      const lenUnit = (app.querySelector('#len-unit') as HTMLSelectElement)
+        .value as HeightUnit
       const heightUnit = (
         app.querySelector('#height-unit') as HTMLSelectElement
       ).value as HeightUnit
@@ -1106,6 +1157,7 @@ function renderLiquidPressure(): void {
       ).value as PressureUnit
       const volUnit = (app.querySelector('#vol-unit') as HTMLSelectElement)
         .value as VolUnit
+      const orientation = orientationEl.value as CylinderOrientation
 
       if (solveFor === 'pressure') {
         const psi = liquidPressurePsi(
@@ -1127,10 +1179,16 @@ function renderLiquidPressure(): void {
         setNum(heightEl, fromHeightFeet(heightFt, heightUnit))
       }
 
-      const bbls = cylinderVolumeBbls(
-        toInches(num(diaEl), diaUnit),
-        toHeightFeet(num(heightEl), heightUnit),
-      )
+      const diaIn = toInches(num(diaEl), diaUnit)
+      const heightFt = toHeightFeet(num(heightEl), heightUnit)
+      const bbls =
+        orientation === 'horizontal'
+          ? horizontalCylinderVolumeBbls(
+              diaIn,
+              toHeightFeet(num(lenEl), lenUnit),
+              heightFt,
+            )
+          : cylinderVolumeBbls(diaIn, heightFt)
       setNum(volEl, fromBbls(bbls, volUnit))
     },
   )

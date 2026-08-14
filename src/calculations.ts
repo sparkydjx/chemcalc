@@ -63,6 +63,37 @@ export function cylinderVolumeBbls(diameterIn: number, heightFt: number): number
   return displacementBbls(diameterIn, heightFt)
 }
 
+/**
+ * Partially filled horizontal cylinder volume (bbls).
+ *
+ * Diameter (in), cylinder length (ft), and liquid fill height (ft) from the
+ * bottom. Cross-section area:
+ *   A = R² acos((R − h)/R) − (R − h) √(2 R h − h²)
+ * then V_bbl = A × L × 7.4805 / 42. Height is clamped to [0, D].
+ */
+export function horizontalCylinderVolumeBbls(
+  diameterIn: number,
+  lengthFt: number,
+  heightFt: number,
+): number {
+  const radiusFt = diameterIn / 24
+  if (!(radiusFt > 0) || !(lengthFt > 0) || !Number.isFinite(heightFt)) {
+    return NaN
+  }
+  if (heightFt <= 0) return 0
+  if (heightFt >= 2 * radiusFt) {
+    return displacementBbls(diameterIn, lengthFt)
+  }
+
+  const r = radiusFt
+  const h = heightFt
+  const areaFt2 =
+    r * r * Math.acos((r - h) / r) - (r - h) * Math.sqrt(2 * r * h - h * h)
+  return (areaFt2 * lengthFt * 7.4805) / 42
+}
+
+export type CylinderOrientation = 'vertical' | 'horizontal'
+
 /** Solve displacement for diameter (in). */
 export function displacementDiameterIn(bbls: number, lengthFt: number): number {
   return 24 * Math.sqrt(bbls / (lengthFt * 7.4805 / 42 * PI))
