@@ -94,6 +94,31 @@ export function horizontalCylinderVolumeBbls(
 
 export type CylinderOrientation = 'vertical' | 'horizontal'
 
+/**
+ * Liquid volume (bbls) above a valve offset from the tank bottom.
+ * Subtracts the dead volume below `offsetFt`. Offset ≤ 0 is ignored.
+ * Result is 0 when liquid height is at or below the valve.
+ */
+export function cylinderVolumeAboveOffsetBbls(
+  orientation: CylinderOrientation,
+  diameterIn: number,
+  heightFt: number,
+  offsetFt: number,
+  lengthFt = 0,
+): number {
+  const volumeAt = (h: number) =>
+    orientation === 'horizontal'
+      ? horizontalCylinderVolumeBbls(diameterIn, lengthFt, h)
+      : cylinderVolumeBbls(diameterIn, h)
+
+  const gross = volumeAt(heightFt)
+  const offset = Number.isFinite(offsetFt) && offsetFt > 0 ? offsetFt : 0
+  if (offset <= 0) return gross
+
+  const net = gross - volumeAt(offset)
+  return net > 0 ? net : 0
+}
+
 /** Solve displacement for diameter (in). */
 export function displacementDiameterIn(bbls: number, lengthFt: number): number {
   return 24 * Math.sqrt(bbls / (lengthFt * 7.4805 / 42 * PI))

@@ -23,8 +23,7 @@ import {
   liquidPressurePsi,
   liquidDensityFromPressure,
   liquidHeightFromPressure,
-  cylinderVolumeBbls,
-  horizontalCylinderVolumeBbls,
+  cylinderVolumeAboveOffsetBbls,
   calculateApiRp14E,
   toInches,
   fromInches,
@@ -112,7 +111,7 @@ const CALCS: { id: Exclude<CalcId, 'home'>; title: string; blurb: string }[] = [
   {
     id: 'liquid-pressure',
     title: 'Liquid Pressure',
-    blurb: 'Density, height, pressure, and vertical/horizontal cylinder volume',
+    blurb: 'Density, height, pressure, cylinder volume, and valve offset',
   },
   {
     id: 'erosional-velocity',
@@ -1072,6 +1071,19 @@ function renderLiquidPressure(): void {
           solveKey: 'height',
           help: 'Liquid column height for hydrostatic pressure. For horizontal cylinders this is also the fill height from the bottom (0 to diameter).',
         })}
+        ${field('Valve offset', {
+          id: 'offset',
+          value: 0,
+          min: '0',
+          unitOptions: [
+            { value: 'in', label: 'in' },
+            { value: 'ft', label: 'ft' },
+            { value: 'm', label: 'm' },
+          ],
+          unitId: 'offset-unit',
+          unitValue: 'in',
+          help: 'Height of the outlet valve above the tank bottom. Subtracts the unusable (dead) volume below the valve from the reported volume. Leave 0 if the valve is at the bottom. Does not change hydrostatic pressure, which still uses liquid height.',
+        })}
         ${field('Pressure', {
           id: 'pressure',
           value: '',
@@ -1099,7 +1111,7 @@ function renderLiquidPressure(): void {
           unitId: 'vol-unit',
           unitValue: 'Gals',
           solved: true,
-          help: 'Liquid volume in the cylinder. Vertical uses π r² h; horizontal uses the partial-circle fill formula.',
+          help: 'Liquid volume above the valve. Vertical uses π r² h; horizontal uses the partial-circle fill formula. A valve offset subtracts the dead volume below the outlet.',
         })}
       </form>
     `,
@@ -1126,12 +1138,14 @@ function renderLiquidPressure(): void {
       'dia',
       'len',
       'height',
+      'offset',
       'pressure',
       'vol',
       'density-unit',
       'dia-unit',
       'len-unit',
       'height-unit',
+      'offset-unit',
       'pressure-unit',
       'vol-unit',
     ],
@@ -1140,6 +1154,7 @@ function renderLiquidPressure(): void {
       const diaEl = app.querySelector<HTMLInputElement>('#dia')!
       const lenEl = app.querySelector<HTMLInputElement>('#len')!
       const heightEl = app.querySelector<HTMLInputElement>('#height')!
+      const offsetEl = app.querySelector<HTMLInputElement>('#offset')!
       const pressureEl = app.querySelector<HTMLInputElement>('#pressure')!
       const volEl = app.querySelector<HTMLInputElement>('#vol')!
       const densityUnit = (
@@ -1151,6 +1166,9 @@ function renderLiquidPressure(): void {
         .value as HeightUnit
       const heightUnit = (
         app.querySelector('#height-unit') as HTMLSelectElement
+      ).value as HeightUnit
+      const offsetUnit = (
+        app.querySelector('#offset-unit') as HTMLSelectElement
       ).value as HeightUnit
       const pressureUnit = (
         app.querySelector('#pressure-unit') as HTMLSelectElement
@@ -1181,14 +1199,19 @@ function renderLiquidPressure(): void {
 
       const diaIn = toInches(num(diaEl), diaUnit)
       const heightFt = toHeightFeet(num(heightEl), heightUnit)
-      const bbls =
-        orientation === 'horizontal'
-          ? horizontalCylinderVolumeBbls(
-              diaIn,
-              toHeightFeet(num(lenEl), lenUnit),
-              heightFt,
-            )
-          : cylinderVolumeBbls(diaIn, heightFt)
+      const offsetRaw = num(offsetEl)
+      const offsetFt =
+        Number.isFinite(offsetRaw) && offsetRaw > 0
+          ? toHeightFeet(offsetRaw, offsetUnit)
+          : 0
+      const lengthFt = toHeightFeet(num(lenEl), lenUnit)
+      const bbls = cylinderVolumeAboveOffsetBbls(
+        orientation,
+        diaIn,
+        heightFt,
+        offsetFt,
+        lengthFt,
+      )
       setNum(volEl, fromBbls(bbls, volUnit))
     },
   )
