@@ -72,7 +72,6 @@ export function displacementBbls(diameterIn: number, lengthFt: number): number {
  * Volumes use inside diameter only (ASME F&D knuckle = 0.06 × D).
  */
 export type EndCapType =
-  | 'none'
   | 'flat'
   | 'hemispherical'
   | 'elliptical'
@@ -89,7 +88,6 @@ export function endCapVolumeBbls(
   const diameterFt = diameterIn / 12
 
   switch (endCap) {
-    case 'none':
     case 'flat':
       return 0
     case 'hemispherical':
@@ -230,7 +228,7 @@ export function displacementDiameterIn(bbls: number, lengthFt: number): number {
 
 /**
  * Solve cylinder + end-cap displacement for diameter (in).
- * Flat/none caps reduce to the pipe-only square-root solution; otherwise
+ * Flat caps reduce to the pipe-only square-root solution; otherwise
  * Newton–Raphson on β D³ + α D² − V = 0.
  */
 export function displacementDiameterInWithEndCaps(
@@ -240,7 +238,7 @@ export function displacementDiameterInWithEndCaps(
   endCapCount = 2,
 ): number {
   if (!(bbls > 0) || !(lengthFt > 0)) return NaN
-  if (endCap === 'none' || endCap === 'flat' || endCapCount === 0) {
+  if (endCap === 'flat' || endCapCount === 0) {
     return displacementDiameterIn(bbls, lengthFt)
   }
 
