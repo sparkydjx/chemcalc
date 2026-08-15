@@ -503,14 +503,13 @@ function renderDisplacement(): void {
               <span class="field-label">End caps</span>
               ${helpLink(
                 'End caps',
-                'Optional cylinder end caps on both ends. Flat/none add no volume. Hemispherical = πD³/12 each, elliptical 2:1 = πD³/24 each, ASME F&D torispherical uses dish radius = D and knuckle = 0.06D. Straight length stays tangent-line to tangent-line.',
+                'Cylinder end caps on both ends. Flat adds no volume. Hemispherical = πD³/12 each, elliptical 2:1 = πD³/24 each, ASME F&D torispherical uses dish radius = D and knuckle = 0.06D. Straight length stays tangent-line to tangent-line.',
               )}
             </span>
           </div>
           <span class="field-controls">
             <select id="end-cap" aria-label="End caps">
-              <option value="none" selected>None</option>
-              <option value="flat">Flat</option>
+              <option value="flat" selected>Flat</option>
               <option value="hemispherical">Hemispherical</option>
               <option value="elliptical">Elliptical (2:1)</option>
               <option value="torispherical">Torispherical (ASME F&amp;D)</option>
