@@ -3,9 +3,9 @@ import {
   dosageRate,
   dosagePpm,
   dosageBblsPerDay,
-  displacementBbls,
-  displacementDiameterIn,
-  displacementLengthFt,
+  displacementWithEndCapsBbls,
+  displacementDiameterInWithEndCaps,
+  displacementLengthFtWithEndCaps,
   liquidVelocityFps,
   liquidRateBblsPerDay,
   liquidDiameterIn,
@@ -62,6 +62,7 @@ import {
   type HeightUnit,
   type PressureUnit,
   type CylinderOrientation,
+  type EndCapType,
 } from './calculations'
 import {
   runFullCalculation,
@@ -93,7 +94,7 @@ const CALCS: { id: Exclude<CalcId, 'home'>; title: string; blurb: string }[] = [
   {
     id: 'displacement',
     title: 'Line Displacement Volume',
-    blurb: 'Diameter, length, and volume — solve for any',
+    blurb: 'Diameter, length, end caps, and volume — solve for any',
   },
   {
     id: 'liquid-velocity',
@@ -494,7 +495,28 @@ function renderDisplacement(): void {
           unitId: 'dia-unit',
           unitValue: 'in',
           solveKey: 'dia',
+          help: 'Inside diameter of the line or vessel. End-cap volumes are computed from this diameter alone.',
         })}
+        <div class="field" data-field="end-cap">
+          <div class="field-header">
+            <span class="field-label-row">
+              <span class="field-label">End caps</span>
+              ${helpLink(
+                'End caps',
+                'Optional cylinder end caps on both ends. Flat/none add no volume. Hemispherical = πD³/12 each, elliptical 2:1 = πD³/24 each, ASME F&D torispherical uses dish radius = D and knuckle = 0.06D. Straight length stays tangent-line to tangent-line.',
+              )}
+            </span>
+          </div>
+          <span class="field-controls">
+            <select id="end-cap" aria-label="End caps">
+              <option value="none" selected>None</option>
+              <option value="flat">Flat</option>
+              <option value="hemispherical">Hemispherical</option>
+              <option value="elliptical">Elliptical (2:1)</option>
+              <option value="torispherical">Torispherical (ASME F&amp;D)</option>
+            </select>
+          </span>
+        </div>
         ${field('Line length', {
           id: 'len',
           value: 5280,
@@ -507,6 +529,7 @@ function renderDisplacement(): void {
           unitId: 'len-unit',
           unitValue: 'ft',
           solveKey: 'len',
+          help: 'Straight cylindrical length (tangent line to tangent line). End-cap dish depth is not included here.',
         })}
         ${field('Displacement volume', {
           id: 'vol',
@@ -521,19 +544,23 @@ function renderDisplacement(): void {
           unitValue: 'Bbls',
           solveKey: 'vol',
           solved: true,
+          help: 'Cylinder volume plus both end caps when a head type is selected.',
         })}
       </form>
     `,
     true,
   )
   wireBack()
+  wireFieldHelp()
   wireSolveForm(
     'vol',
-    ['dia', 'len', 'vol', 'dia-unit', 'len-unit', 'vol-unit'],
+    ['dia', 'len', 'vol', 'end-cap', 'dia-unit', 'len-unit', 'vol-unit'],
     (solveFor) => {
       const diaEl = app.querySelector<HTMLInputElement>('#dia')!
       const lenEl = app.querySelector<HTMLInputElement>('#len')!
       const volEl = app.querySelector<HTMLInputElement>('#vol')!
+      const endCap = (app.querySelector('#end-cap') as HTMLSelectElement)
+        .value as EndCapType
       const diaUnit = (app.querySelector('#dia-unit') as HTMLSelectElement)
         .value as DiaUnit
       const lenUnit = (app.querySelector('#len-unit') as HTMLSelectElement)
@@ -542,21 +569,24 @@ function renderDisplacement(): void {
         .value as VolUnit
 
       if (solveFor === 'vol') {
-        const bbls = displacementBbls(
+        const bbls = displacementWithEndCapsBbls(
           toInches(num(diaEl), diaUnit),
           toFeet(num(lenEl), lenUnit),
+          endCap,
         )
         setNum(volEl, fromBbls(bbls, volUnit))
       } else if (solveFor === 'dia') {
-        const diaIn = displacementDiameterIn(
+        const diaIn = displacementDiameterInWithEndCaps(
           toBbls(num(volEl), volUnit),
           toFeet(num(lenEl), lenUnit),
+          endCap,
         )
         setNum(diaEl, fromInches(diaIn, diaUnit))
       } else {
-        const lenFt = displacementLengthFt(
+        const lenFt = displacementLengthFtWithEndCaps(
           toBbls(num(volEl), volUnit),
           toInches(num(diaEl), diaUnit),
+          endCap,
         )
         setNum(lenEl, fromFeet(lenFt, lenUnit))
       }
