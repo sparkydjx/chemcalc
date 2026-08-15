@@ -1088,18 +1088,20 @@ function renderTankVolume(): void {
           unitValue: 'in',
           help: 'Height of the outlet valve above the tank bottom. Pressure uses only the fluid above this point. Volume subtracts the dead space below the valve. Leave 0 if the valve is at the bottom.',
         })}
-        ${field('Head above valve', {
-          id: 'head',
+        ${field('Volume', {
+          id: 'vol',
           value: '',
+          min: '0',
           unitOptions: [
-            { value: 'in', label: 'in' },
-            { value: 'ft', label: 'ft' },
-            { value: 'm', label: 'm' },
+            { value: 'Gals', label: 'Gal' },
+            { value: 'Bbls', label: 'Bbls' },
+            { value: 'L', label: 'L' },
+            { value: 'm3', label: 'm³' },
           ],
-          unitId: 'head-unit',
-          unitValue: 'in',
+          unitId: 'vol-unit',
+          unitValue: 'Gals',
           solved: true,
-          help: 'Liquid height minus valve offset — the fluid column used for hydrostatic pressure. Example: 20 in of liquid and a 2 in valve offset → 18 in of head.',
+          help: 'Liquid volume above the valve. Vertical uses π r² h; horizontal uses the partial-circle fill formula. A valve offset subtracts the dead volume below the outlet.',
         })}
         ${field('Pressure', {
           id: 'pressure',
@@ -1116,20 +1118,18 @@ function renderTankVolume(): void {
           solved: true,
           help: 'Hydrostatic pressure of the fluid above the valve (P = ρ × head / 144). With 20 in of liquid and a 2 in offset, pressure is based on 18 in of fluid, not 20 in.',
         })}
-        ${field('Volume', {
-          id: 'vol',
+        ${field('Head above valve', {
+          id: 'head',
           value: '',
-          min: '0',
           unitOptions: [
-            { value: 'Gals', label: 'Gal' },
-            { value: 'Bbls', label: 'Bbls' },
-            { value: 'L', label: 'L' },
-            { value: 'm3', label: 'm³' },
+            { value: 'in', label: 'in' },
+            { value: 'ft', label: 'ft' },
+            { value: 'm', label: 'm' },
           ],
-          unitId: 'vol-unit',
-          unitValue: 'Gals',
+          unitId: 'head-unit',
+          unitValue: 'in',
           solved: true,
-          help: 'Liquid volume above the valve. Vertical uses π r² h; horizontal uses the partial-circle fill formula. A valve offset subtracts the dead volume below the outlet.',
+          help: 'Liquid height minus valve offset — the fluid column used for hydrostatic pressure. Example: 20 in of liquid and a 2 in valve offset → 18 in of head.',
         })}
       </form>
     `,
