@@ -54,9 +54,81 @@ export function dosageBblsPerDay(galsPerDay: number, targetPpm: number): number 
   return (galsPerDay * 1_000_000) / (targetPpm * 42)
 }
 
+/** US gal per ft³ used by the displacement (and related) formulas. */
+const DISP_GAL_PER_FT3 = 7.4805
+
+/** ft³ → oilfield barrels. */
+function ft3ToBbls(ft3: number): number {
+  return (ft3 * DISP_GAL_PER_FT3) / 42
+}
+
 /** Line ID (in) + length (ft) → displacement volume (bbls). */
 export function displacementBbls(diameterIn: number, lengthFt: number): number {
-  return (diameterIn / 24) ** 2 * lengthFt * 7.4805 / 42 * PI
+  return (diameterIn / 24) ** 2 * lengthFt * DISP_GAL_PER_FT3 / 42 * PI
+}
+
+/**
+ * Cylinder end-cap styles for displacement / vessel volume.
+ * Volumes use inside diameter only (ASME F&D knuckle = 0.06 × D).
+ */
+export type EndCapType =
+  | 'none'
+  | 'flat'
+  | 'hemispherical'
+  | 'elliptical'
+  | 'torispherical'
+
+/** Internal volume (bbls) of one end cap from inside diameter (in). */
+export function endCapVolumeBbls(
+  diameterIn: number,
+  endCap: EndCapType,
+): number {
+  if (!(diameterIn > 0) || !Number.isFinite(diameterIn)) return NaN
+
+  const radiusFt = diameterIn / 24
+  const diameterFt = diameterIn / 12
+
+  switch (endCap) {
+    case 'none':
+    case 'flat':
+      return 0
+    case 'hemispherical':
+      // V = (2/3) π R³ = π D³ / 12
+      return ft3ToBbls((2 / 3) * PI * radiusFt ** 3)
+    case 'elliptical':
+      // ASME 2:1: V = (1/3) π R³ = π D³ / 24
+      return ft3ToBbls((1 / 3) * PI * radiusFt ** 3)
+    case 'torispherical': {
+      // Exact torispherical dome with ASME F&D: DR = D, ICR = 0.06 D
+      const R = diameterFt
+      const a = 0.06 * diameterFt
+      const c = diameterFt / 2 - a
+      const under = (R - a) ** 2 - c ** 2
+      if (!(under > 0)) return NaN
+      const h = R - Math.sqrt(under)
+      const ft3 =
+        (PI / 3) *
+        (2 * h * R * R -
+          (2 * a * a + c * c + 2 * a * R) * (R - h) +
+          3 * a * a * c * Math.asin((R - h) / (R - a)))
+      return ft3ToBbls(ft3)
+    }
+  }
+}
+
+/**
+ * Cylinder + end caps → displacement volume (bbls).
+ * Default `endCapCount` is 2 (both ends of the cylinder).
+ */
+export function displacementWithEndCapsBbls(
+  diameterIn: number,
+  lengthFt: number,
+  endCap: EndCapType,
+  endCapCount = 2,
+): number {
+  const shell = displacementBbls(diameterIn, lengthFt)
+  const caps = endCapCount * endCapVolumeBbls(diameterIn, endCap)
+  return shell + caps
 }
 
 /**
@@ -153,12 +225,65 @@ export function maxCylinderLiquidHeightFt(
 
 /** Solve displacement for diameter (in). */
 export function displacementDiameterIn(bbls: number, lengthFt: number): number {
-  return 24 * Math.sqrt(bbls / (lengthFt * 7.4805 / 42 * PI))
+  return 24 * Math.sqrt(bbls / (lengthFt * DISP_GAL_PER_FT3 / 42 * PI))
+}
+
+/**
+ * Solve cylinder + end-cap displacement for diameter (in).
+ * Flat/none caps reduce to the pipe-only square-root solution; otherwise
+ * Newton–Raphson on β D³ + α D² − V = 0.
+ */
+export function displacementDiameterInWithEndCaps(
+  bbls: number,
+  lengthFt: number,
+  endCap: EndCapType,
+  endCapCount = 2,
+): number {
+  if (!(bbls > 0) || !(lengthFt > 0)) return NaN
+  if (endCap === 'none' || endCap === 'flat' || endCapCount === 0) {
+    return displacementDiameterIn(bbls, lengthFt)
+  }
+
+  // V = α D² + β D³  (D in inches)
+  const alpha = (PI * lengthFt * DISP_GAL_PER_FT3) / (42 * 576)
+  const unitCap = endCapVolumeBbls(1, endCap)
+  if (!Number.isFinite(unitCap)) return NaN
+  const beta = endCapCount * unitCap
+
+  // Seed from the no-cap solution (slightly low when caps add volume).
+  let d = displacementDiameterIn(bbls, lengthFt)
+  if (!Number.isFinite(d) || !(d > 0)) d = 1
+
+  for (let i = 0; i < 40; i++) {
+    const f = beta * d ** 3 + alpha * d ** 2 - bbls
+    const df = 3 * beta * d ** 2 + 2 * alpha * d
+    if (!(Math.abs(df) > 0)) return NaN
+    const next = d - f / df
+    if (!(next > 0) || !Number.isFinite(next)) return NaN
+    if (Math.abs(next - d) <= 1e-10 * Math.max(1, d)) return next
+    d = next
+  }
+  return d
 }
 
 /** Solve displacement for length (ft). */
 export function displacementLengthFt(bbls: number, diameterIn: number): number {
-  return bbls / ((diameterIn / 24) ** 2 * 7.4805 / 42 * PI)
+  return bbls / ((diameterIn / 24) ** 2 * DISP_GAL_PER_FT3 / 42 * PI)
+}
+
+/**
+ * Solve cylinder + end-cap displacement for straight length (ft).
+ * Length is the cylindrical section only (tangent line to tangent line).
+ */
+export function displacementLengthFtWithEndCaps(
+  bbls: number,
+  diameterIn: number,
+  endCap: EndCapType,
+  endCapCount = 2,
+): number {
+  const capVol = endCapCount * endCapVolumeBbls(diameterIn, endCap)
+  if (!Number.isFinite(capVol)) return NaN
+  return displacementLengthFt(bbls - capVol, diameterIn)
 }
 
 /** Liquid rate (bbls/day) in pipe ID (in) → velocity (ft/sec). */
