@@ -16,9 +16,11 @@ const LITERS_PER_GAL = 3.785411784
 /** US liquid gallon → quarts. */
 const QTS_PER_GAL = 4
 export type DiaUnit = 'in' | 'ft' | 'mm' | 'm'
-export type LenUnit = 'ft' | 'miles' | 'km'
+export type LenUnit = 'ft' | 'm' | 'miles' | 'km'
 export type VolUnit = 'Bbls' | 'm3' | 'Gals' | 'L'
 export type VelUnit = 'ft/sec' | 'm/sec'
+/** Residence / contact time along a line. */
+export type TimeUnit = 'sec' | 'min' | 'hrs'
 export type GasRateUnit = 'MCFD' | 'MMCFD' | 'M3/Day'
 /** Density units for hydrostatic liquid pressure. */
 export type DensityUnit = 'gm/mL' | 'lbs/gal' | 'lbs/cuft'
@@ -172,6 +174,11 @@ export function liquidRateBblsPerDay(fps: number, diameterIn: number): number {
 /** Solve liquid velocity for diameter (in). */
 export function liquidDiameterIn(bblsPerDay: number, fps: number): number {
   return 24 * Math.sqrt((bblsPerDay * 5.61458931) / (fps * 86400 * PI))
+}
+
+/** Line length (ft) ÷ velocity (ft/sec) → contact / residence time (sec). */
+export function contactTimeSec(lengthFt: number, velocityFps: number): number {
+  return lengthFt / velocityFps
 }
 
 /**
@@ -429,15 +436,24 @@ export function fromInches(inches: number, unit: DiaUnit): number {
 }
 
 export function toFeet(value: number, unit: LenUnit): number {
+  if (unit === 'm') return value / 0.3048
   if (unit === 'miles') return value * 5280
   if (unit === 'km') return value * 3280.839895
   return value
 }
 
 export function fromFeet(feet: number, unit: LenUnit): number {
+  if (unit === 'm') return feet * 0.3048
   if (unit === 'miles') return feet / 5280
   if (unit === 'km') return feet / 3280.839895
   return feet
+}
+
+/** Convert contact time from seconds to the selected display unit. */
+export function fromSeconds(seconds: number, unit: TimeUnit): number {
+  if (unit === 'min') return seconds / 60
+  if (unit === 'hrs') return seconds / 3600
+  return seconds
 }
 
 export function toBbls(value: number, unit: VolUnit): number {

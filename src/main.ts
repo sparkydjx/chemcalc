@@ -9,6 +9,7 @@ import {
   liquidVelocityFps,
   liquidRateBblsPerDay,
   liquidDiameterIn,
+  contactTimeSec,
   gasVelocityFps,
   gasRateMcfdFromVelocity,
   gasDiameterIn,
@@ -35,6 +36,7 @@ import {
   fromBbls,
   toFps,
   fromFps,
+  fromSeconds,
   toMcfd,
   fromMcfd,
   toLbPerFt3,
@@ -53,6 +55,7 @@ import {
   type LenUnit,
   type VolUnit,
   type VelUnit,
+  type TimeUnit,
   type GasRateUnit,
   type DensityUnit,
   type GasDensityUnit,
@@ -95,12 +98,12 @@ const CALCS: { id: Exclude<CalcId, 'home'>; title: string; blurb: string }[] = [
   {
     id: 'liquid-velocity',
     title: 'Liquid Velocity',
-    blurb: 'Flow rate, diameter, and velocity — solve for any',
+    blurb: 'Flow rate, diameter, velocity, and contact time',
   },
   {
     id: 'gas-velocity',
     title: 'Gas Velocity',
-    blurb: 'Gas rate, diameter, pressure, and velocity — solve for any',
+    blurb: 'Gas rate, diameter, pressure, velocity, and contact time',
   },
   {
     id: 'ion-lbs',
@@ -603,6 +606,33 @@ function renderLiquidVelocity(): void {
           solveKey: 'vel',
           solved: true,
         })}
+        ${field('Line length', {
+          id: 'len',
+          value: 5280,
+          min: '0',
+          unitOptions: [
+            { value: 'ft', label: 'ft' },
+            { value: 'm', label: 'm' },
+            { value: 'km', label: 'km' },
+          ],
+          unitId: 'len-unit',
+          unitValue: 'ft',
+          help: 'Pipe or line length used with velocity to compute contact (residence) time.',
+        })}
+        ${field('Contact time', {
+          id: 'contact',
+          value: '',
+          min: '0',
+          unitOptions: [
+            { value: 'sec', label: 'sec' },
+            { value: 'min', label: 'min' },
+            { value: 'hrs', label: 'hrs' },
+          ],
+          unitId: 'contact-unit',
+          unitValue: 'sec',
+          solved: true,
+          help: 'Time for fluid to travel the line: length ÷ velocity.',
+        })}
       </form>
     `,
     true,
@@ -610,38 +640,63 @@ function renderLiquidVelocity(): void {
   wireBack()
   wireSolveForm(
     'vel',
-    ['rate', 'dia', 'vel', 'rate-unit', 'dia-unit', 'vel-unit'],
+    [
+      'rate',
+      'dia',
+      'vel',
+      'len',
+      'rate-unit',
+      'dia-unit',
+      'vel-unit',
+      'len-unit',
+      'contact-unit',
+    ],
     (solveFor) => {
       const rateEl = app.querySelector<HTMLInputElement>('#rate')!
       const diaEl = app.querySelector<HTMLInputElement>('#dia')!
       const velEl = app.querySelector<HTMLInputElement>('#vel')!
+      const lenEl = app.querySelector<HTMLInputElement>('#len')!
+      const contactEl = app.querySelector<HTMLInputElement>('#contact')!
       const rateUnit = (app.querySelector('#rate-unit') as HTMLSelectElement)
         .value as VolUnit
       const diaUnit = (app.querySelector('#dia-unit') as HTMLSelectElement)
         .value as DiaUnit
       const velUnit = (app.querySelector('#vel-unit') as HTMLSelectElement)
         .value as VelUnit
+      const lenUnit = (app.querySelector('#len-unit') as HTMLSelectElement)
+        .value as LenUnit
+      const contactUnit = (
+        app.querySelector('#contact-unit') as HTMLSelectElement
+      ).value as TimeUnit
       const bblsPerDay = toBbls(num(rateEl), rateUnit)
 
+      let fps: number
       if (solveFor === 'vel') {
-        const fps = liquidVelocityFps(
+        fps = liquidVelocityFps(
           bblsPerDay,
           toInches(num(diaEl), diaUnit),
         )
         setNum(velEl, fromFps(fps, velUnit))
       } else if (solveFor === 'rate') {
+        fps = toFps(num(velEl), velUnit)
         const bpd = liquidRateBblsPerDay(
-          toFps(num(velEl), velUnit),
+          fps,
           toInches(num(diaEl), diaUnit),
         )
         setNum(rateEl, fromBbls(bpd, rateUnit))
       } else {
-        const diaIn = liquidDiameterIn(
-          bblsPerDay,
-          toFps(num(velEl), velUnit),
-        )
+        fps = toFps(num(velEl), velUnit)
+        const diaIn = liquidDiameterIn(bblsPerDay, fps)
         setNum(diaEl, fromInches(diaIn, diaUnit))
       }
+
+      setNum(
+        contactEl,
+        fromSeconds(
+          contactTimeSec(toFeet(num(lenEl), lenUnit), fps),
+          contactUnit,
+        ),
+      )
     },
   )
 }
@@ -708,6 +763,33 @@ function renderGasVelocity(): void {
           solveKey: 'vel',
           solved: true,
         })}
+        ${field('Line length', {
+          id: 'len',
+          value: 5280,
+          min: '0',
+          unitOptions: [
+            { value: 'ft', label: 'ft' },
+            { value: 'm', label: 'm' },
+            { value: 'km', label: 'km' },
+          ],
+          unitId: 'len-unit',
+          unitValue: 'ft',
+          help: 'Pipe or line length used with velocity to compute contact (residence) time.',
+        })}
+        ${field('Contact time', {
+          id: 'contact',
+          value: '',
+          min: '0',
+          unitOptions: [
+            { value: 'sec', label: 'sec' },
+            { value: 'min', label: 'min' },
+            { value: 'hrs', label: 'hrs' },
+          ],
+          unitId: 'contact-unit',
+          unitValue: 'sec',
+          solved: true,
+          help: 'Time for fluid to travel the line: length ÷ velocity.',
+        })}
       </form>
     `,
     true,
@@ -725,6 +807,9 @@ function renderGasVelocity(): void {
       'z',
       'vel',
       'vel-unit',
+      'len',
+      'len-unit',
+      'contact-unit',
     ],
     (solveFor) => {
       const rateEl = app.querySelector<HTMLInputElement>('#rate')!
@@ -733,17 +818,25 @@ function renderGasVelocity(): void {
       const tempFEl = app.querySelector<HTMLInputElement>('#tempF')!
       const zEl = app.querySelector<HTMLInputElement>('#z')!
       const velEl = app.querySelector<HTMLInputElement>('#vel')!
+      const lenEl = app.querySelector<HTMLInputElement>('#len')!
+      const contactEl = app.querySelector<HTMLInputElement>('#contact')!
       const rateUnit = (app.querySelector('#rate-unit') as HTMLSelectElement)
         .value as GasRateUnit
       const diaUnit = (app.querySelector('#dia-unit') as HTMLSelectElement)
         .value as DiaUnit
       const velUnit = (app.querySelector('#vel-unit') as HTMLSelectElement)
         .value as VelUnit
+      const lenUnit = (app.querySelector('#len-unit') as HTMLSelectElement)
+        .value as LenUnit
+      const contactUnit = (
+        app.querySelector('#contact-unit') as HTMLSelectElement
+      ).value as TimeUnit
       const tempF = num(tempFEl)
       const z = num(zEl)
 
+      let fps: number
       if (solveFor === 'vel') {
-        const fps = gasVelocityFps(
+        fps = gasVelocityFps(
           toMcfd(num(rateEl), rateUnit),
           toInches(num(diaEl), diaUnit),
           num(psigEl),
@@ -752,8 +845,9 @@ function renderGasVelocity(): void {
         )
         setNum(velEl, fromFps(fps, velUnit))
       } else if (solveFor === 'rate') {
+        fps = toFps(num(velEl), velUnit)
         const mcfd = gasRateMcfdFromVelocity(
-          toFps(num(velEl), velUnit),
+          fps,
           toInches(num(diaEl), diaUnit),
           num(psigEl),
           tempF,
@@ -761,26 +855,36 @@ function renderGasVelocity(): void {
         )
         setNum(rateEl, fromMcfd(mcfd, rateUnit))
       } else if (solveFor === 'dia') {
+        fps = toFps(num(velEl), velUnit)
         const diaIn = gasDiameterIn(
           toMcfd(num(rateEl), rateUnit),
-          toFps(num(velEl), velUnit),
+          fps,
           num(psigEl),
           tempF,
           z,
         )
         setNum(diaEl, fromInches(diaIn, diaUnit))
       } else {
+        fps = toFps(num(velEl), velUnit)
         setNum(
           psigEl,
           gasPressurePsig(
             toMcfd(num(rateEl), rateUnit),
             toInches(num(diaEl), diaUnit),
-            toFps(num(velEl), velUnit),
+            fps,
             tempF,
             z,
           ),
         )
       }
+
+      setNum(
+        contactEl,
+        fromSeconds(
+          contactTimeSec(toFeet(num(lenEl), lenUnit), fps),
+          contactUnit,
+        ),
+      )
     },
   )
 }
