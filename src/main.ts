@@ -89,7 +89,7 @@ const CALCS: { id: Exclude<CalcId, 'home'>; title: string; blurb: string }[] = [
   {
     id: 'dosage',
     title: 'Dosage Calculation',
-    blurb: 'PPM, barrels/day, and chemical rate — solve for any',
+    blurb: 'PPM, barrels/day, and injection rate — solve for any',
   },
   {
     id: 'displacement',
@@ -430,7 +430,7 @@ function renderDosage(): void {
           unitValue: 'Bbls',
           solveKey: 'bbls',
         })}
-        ${field('Chemical rate', {
+        ${field('Injection rate', {
           id: 'rate',
           value: '',
           min: '0',
@@ -438,6 +438,7 @@ function renderDosage(): void {
             { value: 'Gals/Day', label: 'Gals/Day' },
             { value: 'Gals/Hr', label: 'Gals/Hr' },
             { value: 'Gals/Min', label: 'Gals/Min' },
+            { value: 'Bbls/Day', label: 'Bbls/Day' },
             { value: 'L/Day', label: 'L/Day' },
             { value: 'L/Hr', label: 'L/Hr' },
             { value: 'Qrts/Day', label: 'Qrts/Day' },
