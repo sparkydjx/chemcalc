@@ -6,6 +6,7 @@ export type RateUnit =
   | 'Gals/Day'
   | 'Gals/Hr'
   | 'Gals/Min'
+  | 'Bbls/Day'
   | 'Qrts/Day'
   | 'Qrts/Hr'
   | 'L/Day'
@@ -44,12 +45,12 @@ export function dosageRate(
   return galsPerDayToRate(galsPerDay, out)
 }
 
-/** Solve dosage for target PPM given chemical rate and volume. */
+/** Solve dosage for target PPM given injection rate and volume. */
 export function dosagePpm(galsPerDay: number, bblsPerDay: number): number {
   return (galsPerDay * 1_000_000) / (bblsPerDay * 42)
 }
 
-/** Solve dosage for volume (bbls/day) given chemical rate and PPM. */
+/** Solve dosage for volume (bbls/day) given injection rate and PPM. */
 export function dosageBblsPerDay(galsPerDay: number, targetPpm: number): number {
   return (galsPerDay * 1_000_000) / (targetPpm * 42)
 }
@@ -697,6 +698,7 @@ export function fromPsi(psi: number, unit: PressureUnit): number {
 export function rateToGalsPerDay(value: number, unit: RateUnit): number {
   if (unit === 'Gals/Hr') return value * 24
   if (unit === 'Gals/Min') return value * 1440
+  if (unit === 'Bbls/Day') return value * 42
   if (unit === 'Qrts/Day') return value / QTS_PER_GAL
   if (unit === 'Qrts/Hr') return (value * 24) / QTS_PER_GAL
   if (unit === 'L/Day') return value / LITERS_PER_GAL
@@ -707,6 +709,7 @@ export function rateToGalsPerDay(value: number, unit: RateUnit): number {
 export function galsPerDayToRate(gpd: number, unit: RateUnit): number {
   if (unit === 'Gals/Hr') return gpd / 24
   if (unit === 'Gals/Min') return gpd / 1440
+  if (unit === 'Bbls/Day') return gpd / 42
   if (unit === 'Qrts/Day') return gpd * QTS_PER_GAL
   if (unit === 'Qrts/Hr') return (gpd * QTS_PER_GAL) / 24
   if (unit === 'L/Day') return gpd * LITERS_PER_GAL
