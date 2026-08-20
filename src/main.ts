@@ -411,7 +411,7 @@ function renderDosage(): void {
     'Dosage Calculation',
     `
       <form class="calc-form" id="form">
-        ${field('Target PPM', {
+        ${field('PPM', {
           id: 'ppm',
           value: 240,
           min: '0',
