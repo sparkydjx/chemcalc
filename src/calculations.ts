@@ -299,6 +299,65 @@ export function cylinderVolumeAboveOffsetBbls(
   return net > 0 ? net : 0
 }
 
+/** One row of a horizontal-tank volume (strapping) table. */
+export type TankVolumeTableRow = {
+  /** Liquid height from the tank bottom, in the requested height unit. */
+  height: number
+  /** Gross liquid volume at that height, in the requested volume unit. */
+  volume: number
+}
+
+/**
+ * Build a horizontal-tank volume table: one row per unit of the diameter UOM
+ * from empty (0) through full (diameter), with liquid height and volume in the
+ * selected display units. Uses gross fill volume from the tank bottom (no
+ * valve-offset subtraction).
+ */
+export function horizontalTankVolumeTable(
+  diameterIn: number,
+  lengthFt: number,
+  endCap: EndCapType,
+  diaUnit: DiaUnit,
+  heightUnit: HeightUnit,
+  volUnit: VolUnit,
+): TankVolumeTableRow[] {
+  if (!(diameterIn > 0) || !(lengthFt > 0)) return []
+
+  const maxDiaUnits = fromInches(diameterIn, diaUnit)
+  if (!(maxDiaUnits > 0) || !Number.isFinite(maxDiaUnits)) return []
+
+  const rows: TankVolumeTableRow[] = []
+  const pushHeightIn = (heightIn: number) => {
+    const heightFt = heightIn / 12
+    const bbls = tankGrossVolumeBbls(
+      'horizontal',
+      diameterIn,
+      heightFt,
+      lengthFt,
+      endCap,
+    )
+    if (!Number.isFinite(bbls)) return
+    rows.push({
+      height: fromHeightFeet(heightFt, heightUnit),
+      volume: fromBbls(bbls, volUnit),
+    })
+  }
+
+  // Whole steps of 1 diameter-unit from 0 up to (but not past) full diameter.
+  const wholeSteps = Math.floor(maxDiaUnits + 1e-9)
+  for (let i = 0; i <= wholeSteps; i++) {
+    const heightIn = Math.min(toInches(i, diaUnit), diameterIn)
+    pushHeightIn(heightIn)
+  }
+
+  // Include the exact full diameter when it is not already on a whole step.
+  if (maxDiaUnits - wholeSteps > 1e-9) {
+    pushHeightIn(diameterIn)
+  }
+
+  return rows
+}
+
 /**
  * Hydrostatic head (ft) of liquid above a valve offset.
  * Returns 0 when the liquid surface is at or below the valve.

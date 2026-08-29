@@ -377,6 +377,145 @@ select {
   color: var(--accent-deep);
 }
 
+.calc-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+  margin-top: 0.25rem;
+  padding-top: 0.75rem;
+  border-top: 1px solid var(--line);
+}
+
+.action-btn {
+  align-self: stretch;
+  min-height: 2.75rem;
+  padding: 0.55rem 1rem;
+  border: 1px solid rgba(13, 115, 119, 0.35);
+  border-radius: 10px;
+  background: var(--accent);
+  color: #fff;
+  font: inherit;
+  font-size: 1rem;
+  font-weight: 650;
+  cursor: pointer;
+}
+
+.action-btn:hover {
+  background: var(--accent-deep);
+}
+
+.action-btn:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.action-btn-quiet {
+  align-self: auto;
+  min-height: 2.1rem;
+  padding: 0.35rem 0.75rem;
+  border-color: var(--line);
+  background: var(--surface);
+  color: var(--accent-deep);
+  font-size: 0.9rem;
+}
+
+.action-btn-quiet:hover {
+  background: var(--accent-soft);
+}
+
+.action-hint {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.82rem;
+  line-height: 1.35;
+}
+
+.volume-table-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 0.55rem;
+  margin-top: 0.15rem;
+  padding-top: 0.75rem;
+  border-top: 1px solid var(--line);
+}
+
+.volume-table-wrap[hidden] {
+  display: none;
+}
+
+.volume-table-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+
+.volume-table-title {
+  margin: 0;
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: var(--accent-deep);
+}
+
+.volume-table-scroll {
+  max-height: min(22rem, 55vh);
+  overflow: auto;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: #f8fbfb;
+}
+
+.volume-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.92rem;
+}
+
+.volume-table caption {
+  padding: 0.55rem 0.75rem;
+  border-bottom: 1px solid var(--line);
+  color: var(--muted);
+  font-size: 0.78rem;
+  font-weight: 600;
+  text-align: left;
+  caption-side: top;
+}
+
+.volume-table th,
+.volume-table td {
+  padding: 0.45rem 0.75rem;
+  border-bottom: 1px solid var(--line);
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.volume-table th {
+  position: sticky;
+  top: 0;
+  background: #eef6f6;
+  color: var(--muted);
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+}
+
+.volume-table tbody tr:nth-child(even) {
+  background: rgba(255, 255, 255, 0.65);
+}
+
+.volume-table tbody tr:last-child td {
+  border-bottom: none;
+  font-weight: 650;
+}
+
+.volume-table-empty {
+  margin: 0;
+  padding: 0.85rem 0.75rem;
+  color: var(--muted);
+  font-size: 0.88rem;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .calc-link,
   .field {

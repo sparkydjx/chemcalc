@@ -27,6 +27,7 @@ import {
   cylinderVolumeAboveOffsetBbls,
   headAboveValveFt,
   maxCylinderLiquidHeightFt,
+  horizontalTankVolumeTable,
   calculateApiRp14E,
   toInches,
   fromInches,
@@ -1284,6 +1285,23 @@ function renderTankVolume(): void {
           solved: true,
           help: 'Liquid height minus valve offset — the fluid column used for hydrostatic pressure. Example: 20 in of liquid and a 2 in valve offset → 18 in of head.',
         })}
+        <div class="calc-actions">
+          <button type="button" class="action-btn" id="volume-table-btn">
+            Volume table
+          </button>
+          <p class="action-hint" id="volume-table-hint">
+            Horizontal tank: volume at each unit of the diameter UOM, with liquid height and volume in the selected units.
+          </p>
+        </div>
+        <div class="volume-table-wrap" id="volume-table-wrap" hidden>
+          <div class="volume-table-header">
+            <h2 class="volume-table-title">Horizontal volume table</h2>
+            <button type="button" class="action-btn action-btn-quiet" id="volume-table-hide">
+              Hide
+            </button>
+          </div>
+          <div class="volume-table-scroll" id="volume-table-scroll"></div>
+        </div>
       </form>
     `,
     true,
@@ -1294,6 +1312,99 @@ function renderTankVolume(): void {
   const lenField = app.querySelector<HTMLElement>('.field[data-field="len"]')!
   const orientationEl = app.querySelector<HTMLSelectElement>('#orientation')!
   const endCapEl = app.querySelector<HTMLSelectElement>('#end-cap')!
+  const volumeTableBtn = app.querySelector<HTMLButtonElement>('#volume-table-btn')!
+  const volumeTableHide = app.querySelector<HTMLButtonElement>('#volume-table-hide')!
+  const volumeTableWrap = app.querySelector<HTMLElement>('#volume-table-wrap')!
+  const volumeTableScroll = app.querySelector<HTMLElement>('#volume-table-scroll')!
+  let volumeTableVisible = false
+
+  const volUnitLabel = (unit: VolUnit): string => {
+    if (unit === 'm3') return 'm³'
+    if (unit === 'Gals') return 'Gal'
+    return unit
+  }
+
+  const renderVolumeTable = () => {
+    if (!volumeTableVisible) return
+
+    const diaEl = app.querySelector<HTMLInputElement>('#dia')!
+    const lenEl = app.querySelector<HTMLInputElement>('#len')!
+    const diaUnit = (app.querySelector('#dia-unit') as HTMLSelectElement)
+      .value as DiaUnit
+    const heightUnit = (
+      app.querySelector('#height-unit') as HTMLSelectElement
+    ).value as HeightUnit
+    const volUnit = (app.querySelector('#vol-unit') as HTMLSelectElement)
+      .value as VolUnit
+    const endCap = endCapEl.value as EndCapType
+    const diaIn = toInches(num(diaEl), diaUnit)
+    const lengthFt = toHeightFeet(num(lenEl), (
+      app.querySelector('#len-unit') as HTMLSelectElement
+    ).value as HeightUnit)
+
+    const rows = horizontalTankVolumeTable(
+      diaIn,
+      lengthFt,
+      endCap,
+      diaUnit,
+      heightUnit,
+      volUnit,
+    )
+
+    if (rows.length === 0) {
+      volumeTableScroll.innerHTML =
+        '<p class="volume-table-empty">Enter a positive diameter and cylinder length to build the table.</p>'
+      return
+    }
+
+    const heightLabel = `Liquid height (${heightUnit})`
+    const volumeLabel = `Volume (${volUnitLabel(volUnit)})`
+    const body = rows
+      .map(
+        (row) => `
+        <tr>
+          <td>${formatResult(row.height, 4)}</td>
+          <td>${formatResult(row.volume, 4)}</td>
+        </tr>`,
+      )
+      .join('')
+
+    volumeTableScroll.innerHTML = `
+      <table class="volume-table">
+        <caption>
+          Per ${diaUnit} of diameter · ${rows.length} levels
+        </caption>
+        <thead>
+          <tr>
+            <th scope="col">${heightLabel}</th>
+            <th scope="col">${volumeLabel}</th>
+          </tr>
+        </thead>
+        <tbody>${body}</tbody>
+      </table>
+    `
+  }
+
+  const showVolumeTable = () => {
+    volumeTableVisible = true
+    volumeTableWrap.hidden = false
+    // Horizontal table needs cylinder length; switch orientation so length stays visible.
+    if (orientationEl.value !== 'horizontal') {
+      orientationEl.value = 'horizontal'
+      orientationEl.dispatchEvent(new Event('change', { bubbles: true }))
+    }
+    renderVolumeTable()
+    volumeTableWrap.scrollIntoView({ behavior: 'smooth', block: 'nearest' })
+  }
+
+  const hideVolumeTable = () => {
+    volumeTableVisible = false
+    volumeTableWrap.hidden = true
+    volumeTableScroll.innerHTML = ''
+  }
+
+  volumeTableBtn.addEventListener('click', showVolumeTable)
+  volumeTableHide.addEventListener('click', hideVolumeTable)
 
   const applyOrientationUi = () => {
     const horizontal = orientationEl.value === 'horizontal'
@@ -1452,6 +1563,7 @@ function renderTankVolume(): void {
         endCap,
       )
       setNum(volEl, fromBbls(bbls, volUnit))
+      renderVolumeTable()
     },
   )
 }
