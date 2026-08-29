@@ -299,7 +299,7 @@ export function cylinderVolumeAboveOffsetBbls(
   return net > 0 ? net : 0
 }
 
-/** One row of a horizontal-tank volume (strapping) table. */
+/** One row of a tank volume (strapping) table. */
 export type TankVolumeTableRow = {
   /** Liquid height from the tank bottom, in the requested height unit. */
   height: number
@@ -308,10 +308,19 @@ export type TankVolumeTableRow = {
 }
 
 /**
- * Build a horizontal-tank volume table: one row per unit of the diameter UOM
- * from empty (0) through full (diameter), with liquid height and volume in the
- * selected display units. Uses gross fill volume from the tank bottom (no
- * valve-offset subtraction).
+ * Round a table display value to the nearest whole number (integer).
+ * Non-finite values become NaN so callers can drop or show a placeholder.
+ */
+export function tankVolumeTableInteger(value: number): number {
+  if (!Number.isFinite(value)) return NaN
+  return Math.round(value)
+}
+
+/**
+ * Build a horizontal-tank volume table: one integer step per unit of the
+ * diameter UOM from empty (0) through full (diameter). Height and volume are
+ * returned as whole numbers in the selected display units. Uses gross fill
+ * volume from the tank bottom (no valve-offset subtraction).
  */
 export function horizontalTankVolumeTable(
   diameterIn: number,
@@ -338,12 +347,12 @@ export function horizontalTankVolumeTable(
     )
     if (!Number.isFinite(bbls)) return
     rows.push({
-      height: fromHeightFeet(heightFt, heightUnit),
-      volume: fromBbls(bbls, volUnit),
+      height: tankVolumeTableInteger(fromHeightFeet(heightFt, heightUnit)),
+      volume: tankVolumeTableInteger(fromBbls(bbls, volUnit)),
     })
   }
 
-  // Whole steps of 1 diameter-unit from 0 up to (but not past) full diameter.
+  // Whole integer steps of 1 diameter-unit from 0 through full diameter.
   const wholeSteps = Math.floor(maxDiaUnits + 1e-9)
   for (let i = 0; i <= wholeSteps; i++) {
     const heightIn = Math.min(toInches(i, diaUnit), diameterIn)
@@ -353,6 +362,57 @@ export function horizontalTankVolumeTable(
   // Include the exact full diameter when it is not already on a whole step.
   if (maxDiaUnits - wholeSteps > 1e-9) {
     pushHeightIn(diameterIn)
+  }
+
+  return rows
+}
+
+/**
+ * Build a vertical-tank volume table: one integer step per unit of the liquid
+ * height UOM from empty (0) through `maxHeightFt`. Height and volume are
+ * whole numbers in the selected display units. Uses gross fill volume from
+ * the tank bottom (no valve-offset subtraction).
+ */
+export function verticalTankVolumeTable(
+  diameterIn: number,
+  shellLengthFt: number,
+  maxHeightFt: number,
+  endCap: EndCapType,
+  heightUnit: HeightUnit,
+  volUnit: VolUnit,
+): TankVolumeTableRow[] {
+  if (!(diameterIn > 0) || !(maxHeightFt > 0) || !Number.isFinite(maxHeightFt)) {
+    return []
+  }
+  if (endCap !== 'flat' && !(shellLengthFt > 0)) return []
+
+  const maxHeightUnits = fromHeightFeet(maxHeightFt, heightUnit)
+  if (!(maxHeightUnits > 0) || !Number.isFinite(maxHeightUnits)) return []
+
+  const rows: TankVolumeTableRow[] = []
+  const pushHeightUnits = (heightUnits: number) => {
+    const heightFt = Math.min(toHeightFeet(heightUnits, heightUnit), maxHeightFt)
+    const bbls = tankGrossVolumeBbls(
+      'vertical',
+      diameterIn,
+      heightFt,
+      shellLengthFt,
+      endCap,
+    )
+    if (!Number.isFinite(bbls)) return
+    rows.push({
+      height: tankVolumeTableInteger(fromHeightFeet(heightFt, heightUnit)),
+      volume: tankVolumeTableInteger(fromBbls(bbls, volUnit)),
+    })
+  }
+
+  const wholeSteps = Math.floor(maxHeightUnits + 1e-9)
+  for (let i = 0; i <= wholeSteps; i++) {
+    pushHeightUnits(i)
+  }
+
+  if (maxHeightUnits - wholeSteps > 1e-9) {
+    pushHeightUnits(maxHeightUnits)
   }
 
   return rows
