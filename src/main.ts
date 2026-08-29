@@ -1168,6 +1168,25 @@ function renderTankVolume(): void {
             </select>
           </span>
         </div>
+        <div class="field" data-field="end-cap">
+          <div class="field-header">
+            <span class="field-label-row">
+              <span class="field-label">End caps</span>
+              ${helpLink(
+                'End caps',
+                'Cylinder end caps on both ends. Flat adds no volume. Hemispherical = πD³/12 each, elliptical 2:1 = πD³/24 each, ASME F&D torispherical uses dish radius = D and knuckle = 0.06D. Straight length stays tangent-line to tangent-line.',
+              )}
+            </span>
+          </div>
+          <span class="field-controls">
+            <select id="end-cap" aria-label="End caps">
+              <option value="flat" selected>Flat</option>
+              <option value="hemispherical">Hemispherical</option>
+              <option value="elliptical">Elliptical (2:1)</option>
+              <option value="torispherical">Torispherical (ASME F&amp;D)</option>
+            </select>
+          </span>
+        </div>
         ${field('Diameter', {
           id: 'dia',
           value: 12,
@@ -1180,7 +1199,7 @@ function renderTankVolume(): void {
           ],
           unitId: 'dia-unit',
           unitValue: 'in',
-          help: 'Inside diameter of the cylinder (tank or vessel). Used with liquid height (and length when horizontal) to compute volume.',
+          help: 'Inside diameter of the cylinder (tank or vessel). End-cap volumes are computed from this diameter alone.',
         })}
         ${field('Cylinder length', {
           id: 'len',
@@ -1193,7 +1212,7 @@ function renderTankVolume(): void {
           ],
           unitId: 'len-unit',
           unitValue: 'ft',
-          help: 'Axial length of the horizontal cylinder. Not used for vertical tanks.',
+          help: 'Straight cylindrical length (tangent line to tangent line). Required for horizontal tanks and for vertical tanks with dished heads. End-cap dish depth is not included here.',
         })}
         ${field('Liquid height', {
           id: 'height',
@@ -1207,7 +1226,7 @@ function renderTankVolume(): void {
           unitId: 'height-unit',
           unitValue: 'in',
           solveKey: 'height',
-          help: 'Liquid fill height from the tank bottom. Pressure is taken at the valve: head = liquid height − valve offset (e.g. 20 in − 2 in → 18 in of fluid). For horizontal cylinders, you cannot enter a height greater than diameter − valve offset.',
+          help: 'Liquid fill height from the tank bottom. Pressure is taken at the valve: head = liquid height − valve offset (e.g. 20 in − 2 in → 18 in of fluid). For horizontal cylinders, you cannot enter a height greater than diameter − valve offset. For vertical tanks with dished heads, height includes the heads and is capped at shell length + both head depths − valve offset.',
         })}
         ${field('Valve offset', {
           id: 'offset',
@@ -1235,7 +1254,7 @@ function renderTankVolume(): void {
           unitId: 'vol-unit',
           unitValue: 'Gals',
           solved: true,
-          help: 'Liquid volume above the valve. Vertical uses π r² h; horizontal uses the partial-circle fill formula. A valve offset subtracts the dead volume below the outlet.',
+          help: 'Liquid volume above the valve. Vertical uses the cylindrical shell and both end caps when a head type is selected. Horizontal uses the partial-circle fill formula and adds both end caps when the cylinder cross-section is full. A valve offset subtracts the dead volume below the outlet.',
         })}
         ${field('Pressure', {
           id: 'pressure',
@@ -1274,19 +1293,23 @@ function renderTankVolume(): void {
 
   const lenField = app.querySelector<HTMLElement>('.field[data-field="len"]')!
   const orientationEl = app.querySelector<HTMLSelectElement>('#orientation')!
+  const endCapEl = app.querySelector<HTMLSelectElement>('#end-cap')!
 
   const applyOrientationUi = () => {
     const horizontal = orientationEl.value === 'horizontal'
-    lenField.hidden = !horizontal
+    const endCap = endCapEl.value as EndCapType
+    lenField.hidden = !horizontal && endCap === 'flat'
   }
   applyOrientationUi()
   orientationEl.addEventListener('change', applyOrientationUi)
+  endCapEl.addEventListener('change', applyOrientationUi)
 
   wireSolveForm(
     'pressure',
     [
       'density',
       'orientation',
+      'end-cap',
       'dia',
       'len',
       'height',
@@ -1333,8 +1356,10 @@ function renderTankVolume(): void {
       const volUnit = (app.querySelector('#vol-unit') as HTMLSelectElement)
         .value as VolUnit
       const orientation = orientationEl.value as CylinderOrientation
+      const endCap = endCapEl.value as EndCapType
 
       const diaIn = toInches(num(diaEl), diaUnit)
+      const lengthFt = toHeightFeet(num(lenEl), lenUnit)
       const diameterFt = diaIn / 12
       const offsetRaw = num(offsetEl)
       let offsetFt =
@@ -1350,11 +1375,13 @@ function renderTankVolume(): void {
         offsetFt = diameterFt
         setNum(offsetEl, fromHeightFeet(offsetFt, offsetUnit))
       }
-      // Max liquid height input = diameter − valve offset (horizontal only).
+      // Max liquid height input (horizontal: diameter − offset; vertical with heads: shell + 2×head depth − offset).
       const maxHeightFt = maxCylinderLiquidHeightFt(
         orientation,
         diaIn,
         offsetFt,
+        lengthFt,
+        endCap,
       )
 
       let heightFt = toHeightFeet(num(heightEl), heightUnit)
@@ -1416,13 +1443,13 @@ function renderTankVolume(): void {
       const headFt = headAboveValveFt(heightFt, offsetFt)
       setNum(headEl, fromHeightFeet(headFt, headUnit))
 
-      const lengthFt = toHeightFeet(num(lenEl), lenUnit)
       const bbls = cylinderVolumeAboveOffsetBbls(
         orientation,
         diaIn,
         heightFt,
         offsetFt,
         lengthFt,
+        endCap,
       )
       setNum(volEl, fromBbls(bbls, volUnit))
     },

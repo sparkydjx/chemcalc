@@ -169,6 +169,112 @@ export function horizontalCylinderVolumeBbls(
 
 export type CylinderOrientation = 'vertical' | 'horizontal'
 
+/** Axial depth (ft) of one end cap from inside diameter (in). */
+export function endCapDepthFt(diameterIn: number, endCap: EndCapType): number {
+  if (!(diameterIn > 0) || !Number.isFinite(diameterIn)) return NaN
+
+  switch (endCap) {
+    case 'flat':
+      return 0
+    case 'hemispherical':
+      return diameterIn / 24
+    case 'elliptical':
+      return diameterIn / 48
+    case 'torispherical': {
+      const diameterFt = diameterIn / 12
+      const R = diameterFt
+      const a = 0.06 * diameterFt
+      const c = diameterFt / 2 - a
+      const under = (R - a) ** 2 - c ** 2
+      if (!(under > 0)) return NaN
+      return R - Math.sqrt(under)
+    }
+  }
+}
+
+/**
+ * Partial volume (bbls) of one head filled to `fillFt` from its base.
+ * Uses a spherical-segment ratio scaled to the head's full volume (exact for
+ * hemispherical; good approximation for 2:1 elliptical and ASME F&D).
+ */
+export function endCapPartialVolumeBbls(
+  diameterIn: number,
+  endCap: EndCapType,
+  fillFt: number,
+): number {
+  if (endCap === 'flat') return 0
+  const depth = endCapDepthFt(diameterIn, endCap)
+  if (!Number.isFinite(depth) || !(depth > 0)) return NaN
+  if (fillFt <= 0) return 0
+  if (fillFt >= depth) return endCapVolumeBbls(diameterIn, endCap)
+
+  const fullBbls = endCapVolumeBbls(diameterIn, endCap)
+  const fullSegFt3 = (2 / 3) * PI * depth ** 3
+  const partialSegFt3 =
+    (PI * fillFt ** 2 * (3 * depth - fillFt)) / 3
+  return fullBbls * (partialSegFt3 / fullSegFt3)
+}
+
+/**
+ * Vertical vessel volume (bbls) filled to `fillHeightFt` from the bottom.
+ * `shellLengthFt` is the straight cylindrical section (tangent line to tangent line).
+ */
+export function verticalVesselVolumeBbls(
+  diameterIn: number,
+  shellLengthFt: number,
+  fillHeightFt: number,
+  endCap: EndCapType,
+): number {
+  if (endCap === 'flat') return cylinderVolumeBbls(diameterIn, fillHeightFt)
+  if (fillHeightFt <= 0) return 0
+
+  const headDepth = endCapDepthFt(diameterIn, endCap)
+  if (!Number.isFinite(headDepth)) return NaN
+
+  let remaining = fillHeightFt
+  let volume = 0
+
+  const bottomFill = Math.min(remaining, headDepth)
+  volume += endCapPartialVolumeBbls(diameterIn, endCap, bottomFill)
+  remaining -= bottomFill
+  if (remaining <= 0) return volume
+
+  const shellFill = Math.min(remaining, shellLengthFt)
+  volume += cylinderVolumeBbls(diameterIn, shellFill)
+  remaining -= shellFill
+  if (remaining <= 0) return volume
+
+  const topFill = Math.min(remaining, headDepth)
+  volume += endCapPartialVolumeBbls(diameterIn, endCap, topFill)
+  return volume
+}
+
+/** Gross liquid volume (bbls) in a tank at fill height `heightFt` (no valve offset). */
+export function tankGrossVolumeBbls(
+  orientation: CylinderOrientation,
+  diameterIn: number,
+  heightFt: number,
+  lengthFt: number,
+  endCap: EndCapType,
+): number {
+  if (orientation === 'vertical') {
+    if (endCap === 'flat') return cylinderVolumeBbls(diameterIn, heightFt)
+    return verticalVesselVolumeBbls(diameterIn, lengthFt, heightFt, endCap)
+  }
+
+  const cylinderVol = horizontalCylinderVolumeBbls(
+    diameterIn,
+    lengthFt,
+    heightFt,
+  )
+  if (endCap === 'flat') return cylinderVol
+
+  const diameterFt = diameterIn / 12
+  const capVol =
+    heightFt >= diameterFt ? 2 * endCapVolumeBbls(diameterIn, endCap) : 0
+  return cylinderVol + capVol
+}
+
 /**
  * Liquid volume (bbls) above a valve offset from the tank bottom.
  * Subtracts the dead volume below `offsetFt`. Offset ≤ 0 is ignored.
@@ -180,11 +286,10 @@ export function cylinderVolumeAboveOffsetBbls(
   heightFt: number,
   offsetFt: number,
   lengthFt = 0,
+  endCap: EndCapType = 'flat',
 ): number {
   const volumeAt = (h: number) =>
-    orientation === 'horizontal'
-      ? horizontalCylinderVolumeBbls(diameterIn, lengthFt, h)
-      : cylinderVolumeBbls(diameterIn, h)
+    tankGrossVolumeBbls(orientation, diameterIn, h, lengthFt, endCap)
 
   const gross = volumeAt(heightFt)
   const offset = Number.isFinite(offsetFt) && offsetFt > 0 ? offsetFt : 0
@@ -205,19 +310,30 @@ export function headAboveValveFt(heightFt: number, offsetFt: number): number {
 }
 
 /**
- * Max liquid height the user may enter (ft): diameter − valve offset.
- * Horizontal only — diameter is the geometric fill limit. Vertical is uncapped.
- * Offset ≥ diameter → max height is 0.
+ * Max liquid height the user may enter (ft).
+ * Horizontal: diameter − valve offset.
+ * Vertical with end caps: shell length + both head depths − valve offset.
+ * Vertical flat: uncapped.
  */
 export function maxCylinderLiquidHeightFt(
   orientation: CylinderOrientation,
   diameterIn: number,
   offsetFt = 0,
+  shellLengthFt = 0,
+  endCap: EndCapType = 'flat',
 ): number {
-  if (orientation !== 'horizontal') return Number.POSITIVE_INFINITY
+  const offset = Number.isFinite(offsetFt) && offsetFt > 0 ? offsetFt : 0
+
+  if (orientation === 'vertical') {
+    if (endCap === 'flat') return Number.POSITIVE_INFINITY
+    const headDepth = endCapDepthFt(diameterIn, endCap)
+    if (!Number.isFinite(headDepth)) return 0
+    const maxHeight = shellLengthFt + 2 * headDepth - offset
+    return maxHeight > 0 ? maxHeight : 0
+  }
+
   if (!(diameterIn > 0)) return 0
   const diameterFt = diameterIn / 12
-  const offset = Number.isFinite(offsetFt) && offsetFt > 0 ? offsetFt : 0
   const maxHeight = diameterFt - offset
   return maxHeight > 0 ? maxHeight : 0
 }
