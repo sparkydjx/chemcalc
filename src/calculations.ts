@@ -397,6 +397,66 @@ export function maxCylinderLiquidHeightFt(
   return maxHeight > 0 ? maxHeight : 0
 }
 
+/**
+ * Solve for liquid height (ft) from net volume above the valve (bbls).
+ * Uses bisection on {@link cylinderVolumeAboveOffsetBbls}. Returns NaN when
+ * geometry or target volume cannot yield a height.
+ */
+export function liquidHeightFromVolumeAboveOffsetFt(
+  orientation: CylinderOrientation,
+  diameterIn: number,
+  netVolumeBbls: number,
+  offsetFt: number,
+  lengthFt = 0,
+  endCap: EndCapType = 'flat',
+): number {
+  if (!(diameterIn > 0) || !Number.isFinite(netVolumeBbls) || netVolumeBbls < 0) {
+    return NaN
+  }
+
+  const offset = Number.isFinite(offsetFt) && offsetFt > 0 ? offsetFt : 0
+  if (netVolumeBbls === 0) return offset
+
+  const maxHeightFt = maxCylinderLiquidHeightFt(
+    orientation,
+    diameterIn,
+    offset,
+    lengthFt,
+    endCap,
+  )
+  // Vertical flat has no geometric max; use a tall practical cap from volume.
+  const hiCap = Number.isFinite(maxHeightFt)
+    ? maxHeightFt + offset
+    : offset + Math.max(1, netVolumeBbls * 50)
+
+  if (!(hiCap > offset)) return NaN
+
+  const volumeAt = (heightFt: number) =>
+    cylinderVolumeAboveOffsetBbls(
+      orientation,
+      diameterIn,
+      heightFt,
+      offset,
+      lengthFt,
+      endCap,
+    )
+
+  const maxVol = volumeAt(hiCap)
+  if (!Number.isFinite(maxVol)) return NaN
+  if (netVolumeBbls > maxVol + 1e-9) return hiCap
+
+  let lo = offset
+  let hi = hiCap
+  for (let i = 0; i < 80; i++) {
+    const mid = (lo + hi) / 2
+    const vol = volumeAt(mid)
+    if (!Number.isFinite(vol)) return NaN
+    if (vol < netVolumeBbls) lo = mid
+    else hi = mid
+  }
+  return (lo + hi) / 2
+}
+
 /** Solve displacement for diameter (in). */
 export function displacementDiameterIn(bbls: number, lengthFt: number): number {
   return 24 * Math.sqrt(bbls / (lengthFt * DISP_GAL_PER_FT3 / 42 * PI))

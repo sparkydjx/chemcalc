@@ -27,6 +27,7 @@ import {
   cylinderVolumeAboveOffsetBbls,
   headAboveValveFt,
   maxCylinderLiquidHeightFt,
+  liquidHeightFromVolumeAboveOffsetFt,
   horizontalTankVolumeTable,
   calculateApiRp14E,
   toInches,
@@ -1227,7 +1228,7 @@ function renderTankVolume(): void {
           unitId: 'height-unit',
           unitValue: 'in',
           solveKey: 'height',
-          help: 'Liquid fill height from the tank bottom. Pressure is taken at the valve: head = liquid height − valve offset (e.g. 20 in − 2 in → 18 in of fluid). For horizontal cylinders, you cannot enter a height greater than diameter − valve offset. For vertical tanks with dished heads, height includes the heads and is capped at shell length + both head depths − valve offset.',
+          help: 'Liquid fill height from the tank bottom. Pressure is taken at the valve: head = liquid height − valve offset (e.g. 20 in − 2 in → 18 in of fluid). For horizontal cylinders, you cannot enter a height greater than diameter − valve offset. For vertical tanks with dished heads, height includes the heads and is capped at shell length + both head depths − valve offset. Check Solve to find height from volume (or from pressure and density when volume is blank).',
         })}
         ${field('Valve offset', {
           id: 'offset',
@@ -1254,8 +1255,8 @@ function renderTankVolume(): void {
           ],
           unitId: 'vol-unit',
           unitValue: 'Gals',
-          solved: true,
-          help: 'Liquid volume above the valve. Vertical uses the cylindrical shell and both end caps when a head type is selected. Horizontal uses the partial-circle fill formula and adds both end caps when the cylinder cross-section is full. A valve offset subtracts the dead volume below the outlet.',
+          solveKey: 'vol',
+          help: 'Liquid volume above the valve. Vertical uses the cylindrical shell and both end caps when a head type is selected. Horizontal uses the partial-circle fill formula and adds both end caps when the cylinder cross-section is full. A valve offset subtracts the dead volume below the outlet. Check Solve to find volume from liquid height, or enter volume and solve for liquid height.',
         })}
         ${field('Pressure', {
           id: 'pressure',
@@ -1296,9 +1297,14 @@ function renderTankVolume(): void {
         <div class="volume-table-wrap" id="volume-table-wrap" hidden>
           <div class="volume-table-header">
             <h2 class="volume-table-title">Horizontal volume table</h2>
-            <button type="button" class="action-btn action-btn-quiet" id="volume-table-hide">
-              Hide
-            </button>
+            <span class="volume-table-actions">
+              <button type="button" class="action-btn action-btn-quiet" id="volume-table-export" disabled>
+                Export Excel
+              </button>
+              <button type="button" class="action-btn action-btn-quiet" id="volume-table-hide">
+                Hide
+              </button>
+            </span>
           </div>
           <div class="volume-table-scroll" id="volume-table-scroll"></div>
         </div>
@@ -1314,9 +1320,13 @@ function renderTankVolume(): void {
   const endCapEl = app.querySelector<HTMLSelectElement>('#end-cap')!
   const volumeTableBtn = app.querySelector<HTMLButtonElement>('#volume-table-btn')!
   const volumeTableHide = app.querySelector<HTMLButtonElement>('#volume-table-hide')!
+  const volumeTableExport = app.querySelector<HTMLButtonElement>('#volume-table-export')!
   const volumeTableWrap = app.querySelector<HTMLElement>('#volume-table-wrap')!
   const volumeTableScroll = app.querySelector<HTMLElement>('#volume-table-scroll')!
   let volumeTableVisible = false
+  let volumeTableRows: { height: number; volume: number }[] = []
+  let volumeTableHeightLabel = ''
+  let volumeTableVolumeLabel = ''
 
   const volUnitLabel = (unit: VolUnit): string => {
     if (unit === 'm3') return 'm³'
@@ -1350,6 +1360,10 @@ function renderTankVolume(): void {
       heightUnit,
       volUnit,
     )
+    volumeTableRows = rows
+    volumeTableHeightLabel = `Liquid height (${heightUnit})`
+    volumeTableVolumeLabel = `Volume (${volUnitLabel(volUnit)})`
+    volumeTableExport.disabled = rows.length === 0
 
     if (rows.length === 0) {
       volumeTableScroll.innerHTML =
@@ -1357,8 +1371,6 @@ function renderTankVolume(): void {
       return
     }
 
-    const heightLabel = `Liquid height (${heightUnit})`
-    const volumeLabel = `Volume (${volUnitLabel(volUnit)})`
     const body = rows
       .map(
         (row) => `
@@ -1376,8 +1388,8 @@ function renderTankVolume(): void {
         </caption>
         <thead>
           <tr>
-            <th scope="col">${heightLabel}</th>
-            <th scope="col">${volumeLabel}</th>
+            <th scope="col">${volumeTableHeightLabel}</th>
+            <th scope="col">${volumeTableVolumeLabel}</th>
           </tr>
         </thead>
         <tbody>${body}</tbody>
@@ -1401,10 +1413,62 @@ function renderTankVolume(): void {
     volumeTableVisible = false
     volumeTableWrap.hidden = true
     volumeTableScroll.innerHTML = ''
+    volumeTableRows = []
+    volumeTableExport.disabled = true
+  }
+
+  const escapeXml = (value: string): string =>
+    value
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+
+  const exportVolumeTableExcel = () => {
+    if (volumeTableRows.length === 0) return
+
+    const cell = (value: string, type: 'String' | 'Number') =>
+      `<Cell><Data ss:Type="${type}">${escapeXml(value)}</Data></Cell>`
+
+    const headerRow = `<Row>${cell(volumeTableHeightLabel, 'String')}${cell(volumeTableVolumeLabel, 'String')}</Row>`
+    const dataRows = volumeTableRows
+      .map((row) => {
+        const height = Number.isFinite(row.height) ? String(row.height) : ''
+        const volume = Number.isFinite(row.volume) ? String(row.volume) : ''
+        return `<Row>${cell(height, 'Number')}${cell(volume, 'Number')}</Row>`
+      })
+      .join('')
+
+    const xml = `<?xml version="1.0"?>
+<?mso-application progid="Excel.Sheet"?>
+<Workbook xmlns="urn:schemas-microsoft-com:office:spreadsheet"
+ xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet">
+ <Worksheet ss:Name="Volume table">
+  <Table>
+   ${headerRow}
+   ${dataRows}
+  </Table>
+ </Worksheet>
+</Workbook>
+`
+
+    const blob = new Blob([xml], {
+      type: 'application/vnd.ms-excel;charset=utf-8',
+    })
+    const url = URL.createObjectURL(blob)
+    const anchor = document.createElement('a')
+    anchor.href = url
+    anchor.download = 'tank-volume-table.xls'
+    anchor.rel = 'noopener'
+    document.body.appendChild(anchor)
+    anchor.click()
+    anchor.remove()
+    URL.revokeObjectURL(url)
   }
 
   volumeTableBtn.addEventListener('click', showVolumeTable)
   volumeTableHide.addEventListener('click', hideVolumeTable)
+  volumeTableExport.addEventListener('click', exportVolumeTableExcel)
 
   const applyOrientationUi = () => {
     const horizontal = orientationEl.value === 'horizontal'
@@ -1530,14 +1594,30 @@ function renderTankVolume(): void {
           )
           setNum(densityEl, fromLbPerFt3(lbFt3, densityUnit))
         }
+      } else if (solveFor === 'vol') {
+        // Volume from geometry — liquid height is the input.
+        clampHeightInput()
       } else {
-        // Solve for liquid height from bottom = valve offset + head from P/ρ.
-        const headFt = liquidHeightFromPressure(
-          toPsi(num(pressureEl), pressureUnit),
-          toLbPerFt3(num(densityEl), densityUnit),
+        // Solve for liquid height from entered volume (geometry), with
+        // hydrostatic P/ρ as a fallback when volume is not usable.
+        const targetBbls = toBbls(num(volEl), volUnit)
+        const fromVolume = liquidHeightFromVolumeAboveOffsetFt(
+          orientation,
+          diaIn,
+          targetBbls,
+          offsetFt,
+          lengthFt,
+          endCap,
         )
-        setNum(headEl, fromHeightFeet(headFt > 0 ? headFt : 0, headUnit))
-        heightFt = offsetFt + (headFt > 0 ? headFt : 0)
+        if (Number.isFinite(fromVolume) && Number.isFinite(targetBbls)) {
+          heightFt = fromVolume
+        } else {
+          const headFromP = liquidHeightFromPressure(
+            toPsi(num(pressureEl), pressureUnit),
+            toLbPerFt3(num(densityEl), densityUnit),
+          )
+          heightFt = offsetFt + (headFromP > 0 ? headFromP : 0)
+        }
         if (Number.isFinite(maxHeightFt) && heightFt > maxHeightFt) {
           heightFt = maxHeightFt
         }
@@ -1554,15 +1634,19 @@ function renderTankVolume(): void {
       const headFt = headAboveValveFt(heightFt, offsetFt)
       setNum(headEl, fromHeightFeet(headFt, headUnit))
 
-      const bbls = cylinderVolumeAboveOffsetBbls(
-        orientation,
-        diaIn,
-        heightFt,
-        offsetFt,
-        lengthFt,
-        endCap,
-      )
-      setNum(volEl, fromBbls(bbls, volUnit))
+      // Keep volume in sync unless the user is typing volume to solve height.
+      if (solveFor !== 'height') {
+        const bbls = cylinderVolumeAboveOffsetBbls(
+          orientation,
+          diaIn,
+          heightFt,
+          offsetFt,
+          lengthFt,
+          endCap,
+        )
+        setNum(volEl, fromBbls(bbls, volUnit))
+      }
+
       renderVolumeTable()
     },
   )

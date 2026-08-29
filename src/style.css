@@ -450,6 +450,18 @@ select {
   gap: 0.5rem;
 }
 
+.volume-table-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  flex-shrink: 0;
+}
+
+.volume-table-actions .action-btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
 .volume-table-title {
   margin: 0;
   font-size: 0.95rem;
