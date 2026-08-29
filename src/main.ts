@@ -28,6 +28,8 @@ import {
   headAboveValveFt,
   maxCylinderLiquidHeightFt,
   horizontalTankVolumeTable,
+  verticalTankVolumeTable,
+  type TankVolumeTableRow,
   calculateApiRp14E,
   toInches,
   fromInches,
@@ -1290,15 +1292,20 @@ function renderTankVolume(): void {
             Volume table
           </button>
           <p class="action-hint" id="volume-table-hint">
-            Horizontal tank: volume at each unit of the diameter UOM, with liquid height and volume in the selected units.
+            Horizontal: volume at each integer unit of diameter. Vertical: volume at each integer unit of liquid height. Values are whole numbers in the selected units.
           </p>
         </div>
         <div class="volume-table-wrap" id="volume-table-wrap" hidden>
           <div class="volume-table-header">
-            <h2 class="volume-table-title">Horizontal volume table</h2>
-            <button type="button" class="action-btn action-btn-quiet" id="volume-table-hide">
-              Hide
-            </button>
+            <h2 class="volume-table-title" id="volume-table-title">Volume table</h2>
+            <span class="volume-table-actions">
+              <button type="button" class="action-btn action-btn-quiet" id="volume-table-export">
+                Export
+              </button>
+              <button type="button" class="action-btn action-btn-quiet" id="volume-table-hide">
+                Hide
+              </button>
+            </span>
           </div>
           <div class="volume-table-scroll" id="volume-table-scroll"></div>
         </div>
@@ -1314,9 +1321,14 @@ function renderTankVolume(): void {
   const endCapEl = app.querySelector<HTMLSelectElement>('#end-cap')!
   const volumeTableBtn = app.querySelector<HTMLButtonElement>('#volume-table-btn')!
   const volumeTableHide = app.querySelector<HTMLButtonElement>('#volume-table-hide')!
+  const volumeTableExport = app.querySelector<HTMLButtonElement>('#volume-table-export')!
   const volumeTableWrap = app.querySelector<HTMLElement>('#volume-table-wrap')!
   const volumeTableScroll = app.querySelector<HTMLElement>('#volume-table-scroll')!
+  const volumeTableTitle = app.querySelector<HTMLElement>('#volume-table-title')!
   let volumeTableVisible = false
+  let volumeTableRows: TankVolumeTableRow[] = []
+  let volumeTableHeightLabel = ''
+  let volumeTableVolumeLabel = ''
 
   const volUnitLabel = (unit: VolUnit): string => {
     if (unit === 'm3') return 'm³'
@@ -1324,11 +1336,20 @@ function renderTankVolume(): void {
     return unit
   }
 
-  const renderVolumeTable = () => {
-    if (!volumeTableVisible) return
+  const formatTableInt = (n: number): string => {
+    if (!Number.isFinite(n)) return '—'
+    return Math.round(n).toLocaleString('en-US')
+  }
 
+  const buildVolumeTableRows = (): {
+    rows: TankVolumeTableRow[]
+    caption: string
+    title: string
+    emptyMessage: string
+  } => {
     const diaEl = app.querySelector<HTMLInputElement>('#dia')!
     const lenEl = app.querySelector<HTMLInputElement>('#len')!
+    const heightEl = app.querySelector<HTMLInputElement>('#height')!
     const diaUnit = (app.querySelector('#dia-unit') as HTMLSelectElement)
       .value as DiaUnit
     const heightUnit = (
@@ -1337,34 +1358,91 @@ function renderTankVolume(): void {
     const volUnit = (app.querySelector('#vol-unit') as HTMLSelectElement)
       .value as VolUnit
     const endCap = endCapEl.value as EndCapType
+    const orientation = orientationEl.value as CylinderOrientation
     const diaIn = toInches(num(diaEl), diaUnit)
-    const lengthFt = toHeightFeet(num(lenEl), (
-      app.querySelector('#len-unit') as HTMLSelectElement
-    ).value as HeightUnit)
+    const lengthFt = toHeightFeet(
+      num(lenEl),
+      (app.querySelector('#len-unit') as HTMLSelectElement).value as HeightUnit,
+    )
+    const enteredHeightFt = toHeightFeet(num(heightEl), heightUnit)
 
-    const rows = horizontalTankVolumeTable(
+    if (orientation === 'horizontal') {
+      const rows = horizontalTankVolumeTable(
+        diaIn,
+        lengthFt,
+        endCap,
+        diaUnit,
+        heightUnit,
+        volUnit,
+      )
+      return {
+        rows,
+        caption: `Per ${diaUnit} of diameter · integer values · ${rows.length} levels`,
+        title: 'Horizontal volume table',
+        emptyMessage:
+          'Enter a positive diameter and cylinder length to build the table.',
+      }
+    }
+
+    const maxFromGeometry = maxCylinderLiquidHeightFt(
+      'vertical',
       diaIn,
+      0,
       lengthFt,
       endCap,
-      diaUnit,
+    )
+    const maxHeightFt =
+      endCap === 'flat'
+        ? enteredHeightFt
+        : Number.isFinite(maxFromGeometry)
+          ? maxFromGeometry
+          : enteredHeightFt
+
+    const rows = verticalTankVolumeTable(
+      diaIn,
+      lengthFt,
+      maxHeightFt,
+      endCap,
       heightUnit,
       volUnit,
     )
+    return {
+      rows,
+      caption: `Per ${heightUnit} of liquid height · integer values · ${rows.length} levels`,
+      title: 'Vertical volume table',
+      emptyMessage:
+        endCap === 'flat'
+          ? 'Enter a positive diameter and liquid height to build the table.'
+          : 'Enter a positive diameter, cylinder length, and liquid height to build the table.',
+    }
+  }
 
-    if (rows.length === 0) {
-      volumeTableScroll.innerHTML =
-        '<p class="volume-table-empty">Enter a positive diameter and cylinder length to build the table.</p>'
+  const renderVolumeTable = () => {
+    if (!volumeTableVisible) return
+
+    const heightUnit = (
+      app.querySelector('#height-unit') as HTMLSelectElement
+    ).value as HeightUnit
+    const volUnit = (app.querySelector('#vol-unit') as HTMLSelectElement)
+      .value as VolUnit
+    const built = buildVolumeTableRows()
+    volumeTableRows = built.rows
+    volumeTableHeightLabel = `Liquid height (${heightUnit})`
+    volumeTableVolumeLabel = `Volume (${volUnitLabel(volUnit)})`
+    volumeTableTitle.textContent = built.title
+    volumeTableExport.disabled = built.rows.length === 0
+
+    if (built.rows.length === 0) {
+      volumeTableScroll.innerHTML = `<p class="volume-table-empty">${built.emptyMessage}</p>`
       return
     }
 
-    const heightLabel = `Liquid height (${heightUnit})`
-    const volumeLabel = `Volume (${volUnitLabel(volUnit)})`
-    const body = rows
+    const body = built.rows
       .map(
         (row) => `
         <tr>
-          <td>${formatResult(row.height, 4)}</td>
-          <td>${formatResult(row.volume, 4)}</td>
+          <td>${formatTableInt(row.height)}</td>
+          <td>${formatTableInt(row.volume)}</td>
         </tr>`,
       )
       .join('')
@@ -1372,12 +1450,12 @@ function renderTankVolume(): void {
     volumeTableScroll.innerHTML = `
       <table class="volume-table">
         <caption>
-          Per ${diaUnit} of diameter · ${rows.length} levels
+          ${built.caption}
         </caption>
         <thead>
           <tr>
-            <th scope="col">${heightLabel}</th>
-            <th scope="col">${volumeLabel}</th>
+            <th scope="col">${volumeTableHeightLabel}</th>
+            <th scope="col">${volumeTableVolumeLabel}</th>
           </tr>
         </thead>
         <tbody>${body}</tbody>
@@ -1388,11 +1466,6 @@ function renderTankVolume(): void {
   const showVolumeTable = () => {
     volumeTableVisible = true
     volumeTableWrap.hidden = false
-    // Horizontal table needs cylinder length; switch orientation so length stays visible.
-    if (orientationEl.value !== 'horizontal') {
-      orientationEl.value = 'horizontal'
-      orientationEl.dispatchEvent(new Event('change', { bubbles: true }))
-    }
     renderVolumeTable()
     volumeTableWrap.scrollIntoView({ behavior: 'smooth', block: 'nearest' })
   }
@@ -1401,15 +1474,47 @@ function renderTankVolume(): void {
     volumeTableVisible = false
     volumeTableWrap.hidden = true
     volumeTableScroll.innerHTML = ''
+    volumeTableRows = []
+    volumeTableExport.disabled = true
+  }
+
+  const exportVolumeTable = () => {
+    if (volumeTableRows.length === 0) return
+    const escapeCsv = (value: string) => {
+      if (/[",\n]/.test(value)) return `"${value.replace(/"/g, '""')}"`
+      return value
+    }
+    const lines = [
+      `${escapeCsv(volumeTableHeightLabel)},${escapeCsv(volumeTableVolumeLabel)}`,
+      ...volumeTableRows.map(
+        (row) => `${formatTableInt(row.height)},${formatTableInt(row.volume)}`,
+      ),
+    ]
+    const blob = new Blob([lines.join('\n') + '\n'], {
+      type: 'text/csv;charset=utf-8',
+    })
+    const orientation = orientationEl.value
+    const url = URL.createObjectURL(blob)
+    const anchor = document.createElement('a')
+    anchor.href = url
+    anchor.download = `tank-volume-table-${orientation}.csv`
+    anchor.rel = 'noopener'
+    document.body.appendChild(anchor)
+    anchor.click()
+    anchor.remove()
+    URL.revokeObjectURL(url)
   }
 
   volumeTableBtn.addEventListener('click', showVolumeTable)
   volumeTableHide.addEventListener('click', hideVolumeTable)
+  volumeTableExport.addEventListener('click', exportVolumeTable)
+  volumeTableExport.disabled = true
 
   const applyOrientationUi = () => {
     const horizontal = orientationEl.value === 'horizontal'
     const endCap = endCapEl.value as EndCapType
     lenField.hidden = !horizontal && endCap === 'flat'
+    if (volumeTableVisible) renderVolumeTable()
   }
   applyOrientationUi()
   orientationEl.addEventListener('change', applyOrientationUi)
