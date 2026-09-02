@@ -9,8 +9,10 @@ export type RateUnit =
   | 'Bbls/Day'
   | 'Qrts/Day'
   | 'Qrts/Hr'
+  | 'Qrts/Min'
   | 'L/Day'
   | 'L/Hr'
+  | 'L/Min'
 
 /** US liquid gallon → liters. */
 const LITERS_PER_GAL = 3.785411784
@@ -936,8 +938,10 @@ export function rateToGalsPerDay(value: number, unit: RateUnit): number {
   if (unit === 'Bbls/Day') return value * 42
   if (unit === 'Qrts/Day') return value / QTS_PER_GAL
   if (unit === 'Qrts/Hr') return (value * 24) / QTS_PER_GAL
+  if (unit === 'Qrts/Min') return (value * 1440) / QTS_PER_GAL
   if (unit === 'L/Day') return value / LITERS_PER_GAL
   if (unit === 'L/Hr') return (value * 24) / LITERS_PER_GAL
+  if (unit === 'L/Min') return (value * 1440) / LITERS_PER_GAL
   return value
 }
 
@@ -947,8 +951,10 @@ export function galsPerDayToRate(gpd: number, unit: RateUnit): number {
   if (unit === 'Bbls/Day') return gpd / 42
   if (unit === 'Qrts/Day') return gpd * QTS_PER_GAL
   if (unit === 'Qrts/Hr') return (gpd * QTS_PER_GAL) / 24
+  if (unit === 'Qrts/Min') return (gpd * QTS_PER_GAL) / 1440
   if (unit === 'L/Day') return gpd * LITERS_PER_GAL
   if (unit === 'L/Hr') return (gpd * LITERS_PER_GAL) / 24
+  if (unit === 'L/Min') return (gpd * LITERS_PER_GAL) / 1440
   return gpd
 }
 
