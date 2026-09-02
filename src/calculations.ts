@@ -13,9 +13,12 @@ export type RateUnit =
   | 'L/Day'
   | 'L/Hr'
   | 'L/Min'
+  | 'mL/Min'
 
 /** US liquid gallon → liters. */
 const LITERS_PER_GAL = 3.785411784
+/** US liquid gallon → milliliters. */
+const ML_PER_GAL = LITERS_PER_GAL * 1000
 /** US liquid gallon → quarts. */
 const QTS_PER_GAL = 4
 export type DiaUnit = 'in' | 'ft' | 'mm' | 'm'
@@ -942,6 +945,7 @@ export function rateToGalsPerDay(value: number, unit: RateUnit): number {
   if (unit === 'L/Day') return value / LITERS_PER_GAL
   if (unit === 'L/Hr') return (value * 24) / LITERS_PER_GAL
   if (unit === 'L/Min') return (value * 1440) / LITERS_PER_GAL
+  if (unit === 'mL/Min') return (value * 1440) / ML_PER_GAL
   return value
 }
 
@@ -955,6 +959,7 @@ export function galsPerDayToRate(gpd: number, unit: RateUnit): number {
   if (unit === 'L/Day') return gpd * LITERS_PER_GAL
   if (unit === 'L/Hr') return (gpd * LITERS_PER_GAL) / 24
   if (unit === 'L/Min') return (gpd * LITERS_PER_GAL) / 1440
+  if (unit === 'mL/Min') return (gpd * ML_PER_GAL) / 1440
   return gpd
 }
 
