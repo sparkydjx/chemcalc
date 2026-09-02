@@ -1276,7 +1276,7 @@ function renderTankVolume(): void {
           solved: true,
           help: 'Hydrostatic pressure of the fluid above the valve (P = ρ × head / 144). With 20 in of liquid and a 2 in offset, pressure is based on 18 in of fluid, not 20 in.',
         })}
-        ${field('Head above valve', {
+        ${field('Level height above valve', {
           id: 'head',
           value: '',
           unitOptions: [
