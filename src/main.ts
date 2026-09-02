@@ -444,6 +444,7 @@ function renderDosage(): void {
             { value: 'L/Day', label: 'L/Day' },
             { value: 'L/Hr', label: 'L/Hr' },
             { value: 'L/Min', label: 'L/Min' },
+            { value: 'mL/Min', label: 'mL/Min' },
             { value: 'Qrts/Day', label: 'Qrts/Day' },
             { value: 'Qrts/Hr', label: 'Qrts/Hr' },
             { value: 'Qrts/Min', label: 'Qrts/Min' },
