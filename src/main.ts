@@ -91,7 +91,7 @@ const CALCS: { id: Exclude<CalcId, 'home'>; title: string; blurb: string }[] = [
   {
     id: 'dosage',
     title: 'Dosage Calculation',
-    blurb: 'PPM, barrels/day, and injection rate — solve for any',
+    blurb: 'PPM, barrels/day, and injection rate — optionally with liquid or gas velocity',
   },
   {
     id: 'displacement',
@@ -356,11 +356,12 @@ function wireSolveForm(
   defaultSolve: string,
   inputIds: string[],
   compute: (solveFor: string) => void,
-): void {
+  root: ParentNode = app,
+): { getSolveFor: () => string; run: () => void } {
   let solveFor = defaultSolve
 
   const applySolveUi = () => {
-    app.querySelectorAll<HTMLElement>('.field[data-field]').forEach((wrap) => {
+    root.querySelectorAll<HTMLElement>('.field[data-field]').forEach((wrap) => {
       const check = wrap.querySelector<HTMLInputElement>('.solve-check')
       // Always-output fields (no Solve checkbox) keep their initial readonly state.
       if (!check) return
@@ -377,7 +378,7 @@ function wireSolveForm(
     })
   }
 
-  app.querySelectorAll<HTMLInputElement>('.solve-check').forEach((check) => {
+  root.querySelectorAll<HTMLInputElement>('.solve-check').forEach((check) => {
     check.addEventListener('change', () => {
       if (check.checked) {
         solveFor = check.dataset.solve!
@@ -406,6 +407,20 @@ function wireSolveForm(
 
   applySolveUi()
   run()
+  return { getSolveFor: () => solveFor, run }
+}
+
+/** Mutually exclusive include checkboxes (e.g. liquid vs gas velocity on dosage). */
+function includeOption(id: string, label: string, help?: string): string {
+  return `
+    <label class="include-option">
+      <input type="checkbox" id="${id}" />
+      <span class="include-option-text">
+        <span class="include-option-label">${escapeHtml(label)}</span>
+        ${help ? `<span class="include-option-help">${escapeHtml(help)}</span>` : ''}
+      </span>
+    </label>
+  `
 }
 
 function renderDosage(): void {
@@ -413,76 +428,472 @@ function renderDosage(): void {
     'Dosage Calculation',
     `
       <form class="calc-form" id="form">
-        ${field('PPM', {
-          id: 'ppm',
-          value: 240,
-          min: '0',
-          unit: 'PPM',
-          solveKey: 'ppm',
-        })}
-        ${field('Volume', {
-          id: 'bbls',
-          value: 100,
-          min: '0',
-          unitOptions: [
-            { value: 'Bbls', label: 'Bbls/Day' },
-            { value: 'm3', label: 'm³/Day' },
-          ],
-          unitId: 'vol-unit',
-          unitValue: 'Bbls',
-          solveKey: 'bbls',
-        })}
-        ${field('Injection rate', {
-          id: 'rate',
-          value: '',
-          min: '0',
-          unitOptions: [
-            { value: 'Gals/Day', label: 'Gals/Day' },
-            { value: 'Gals/Hr', label: 'Gals/Hr' },
-            { value: 'Gals/Min', label: 'Gals/Min' },
-            { value: 'Bbls/Day', label: 'Bbls/Day' },
-            { value: 'L/Day', label: 'L/Day' },
-            { value: 'L/Hr', label: 'L/Hr' },
-            { value: 'L/Min', label: 'L/Min' },
-            { value: 'mL/Min', label: 'mL/Min' },
-            { value: 'Qrts/Day', label: 'Qrts/Day' },
-            { value: 'Qrts/Hr', label: 'Qrts/Hr' },
-            { value: 'Qrts/Min', label: 'Qrts/Min' },
-          ],
-          unitId: 'rate-unit',
-          unitValue: 'Gals/Day',
-          solveKey: 'rate',
-          solved: true,
-        })}
+        <div id="dosage-fields">
+          ${field('PPM', {
+            id: 'ppm',
+            value: 240,
+            min: '0',
+            unit: 'PPM',
+            solveKey: 'ppm',
+          })}
+          ${field('Volume', {
+            id: 'bbls',
+            value: 100,
+            min: '0',
+            unitOptions: [
+              { value: 'Bbls', label: 'Bbls/Day' },
+              { value: 'm3', label: 'm³/Day' },
+            ],
+            unitId: 'vol-unit',
+            unitValue: 'Bbls',
+            solveKey: 'bbls',
+            help: 'Treated fluid volume rate. When Liquid Velocity is included, this is also the flow rate used for velocity and contact time.',
+          })}
+          ${field('Injection rate', {
+            id: 'rate',
+            value: '',
+            min: '0',
+            unitOptions: [
+              { value: 'Gals/Day', label: 'Gals/Day' },
+              { value: 'Gals/Hr', label: 'Gals/Hr' },
+              { value: 'Gals/Min', label: 'Gals/Min' },
+              { value: 'Bbls/Day', label: 'Bbls/Day' },
+              { value: 'L/Day', label: 'L/Day' },
+              { value: 'L/Hr', label: 'L/Hr' },
+              { value: 'L/Min', label: 'L/Min' },
+              { value: 'mL/Min', label: 'mL/Min' },
+              { value: 'Qrts/Day', label: 'Qrts/Day' },
+              { value: 'Qrts/Hr', label: 'Qrts/Hr' },
+              { value: 'Qrts/Min', label: 'Qrts/Min' },
+            ],
+            unitId: 'rate-unit',
+            unitValue: 'Gals/Day',
+            solveKey: 'rate',
+            solved: true,
+          })}
+        </div>
+
+        ${sectionTitle('Velocity')}
+        <div class="include-options" role="group" aria-label="Include velocity calculator">
+          ${includeOption(
+            'include-liquid',
+            'Liquid Velocity',
+            'Pipe diameter, velocity, and contact time from the volume above',
+          )}
+          ${includeOption(
+            'include-gas',
+            'Gas Velocity',
+            'Gas rate, pressure, diameter, velocity, and contact time',
+          )}
+        </div>
+
+        <div id="liquid-velocity-panel" class="embedded-calc" hidden>
+          ${sectionTitle('Liquid Velocity')}
+          <p class="embed-note">Uses Volume above as liquid flow rate.</p>
+          ${field('Diameter', {
+            id: 'lv-dia',
+            value: 12,
+            min: '0',
+            unitOptions: [
+              { value: 'in', label: 'in' },
+              { value: 'mm', label: 'mm' },
+            ],
+            unitId: 'lv-dia-unit',
+            unitValue: 'in',
+            solveKey: 'dia',
+          })}
+          ${field('Velocity', {
+            id: 'lv-vel',
+            value: '',
+            min: '0',
+            unitOptions: [
+              { value: 'ft/sec', label: 'ft/sec' },
+              { value: 'm/sec', label: 'm/sec' },
+            ],
+            unitId: 'lv-vel-unit',
+            unitValue: 'ft/sec',
+            solveKey: 'vel',
+            solved: true,
+          })}
+          ${field('Line length', {
+            id: 'lv-len',
+            value: 5280,
+            min: '0',
+            unitOptions: [
+              { value: 'ft', label: 'ft' },
+              { value: 'm', label: 'm' },
+              { value: 'km', label: 'km' },
+            ],
+            unitId: 'lv-len-unit',
+            unitValue: 'ft',
+            help: 'Pipe or line length used with velocity to compute contact (residence) time.',
+          })}
+          ${field('Contact time', {
+            id: 'lv-contact',
+            value: '',
+            min: '0',
+            unitOptions: [
+              { value: 'sec', label: 'sec' },
+              { value: 'min', label: 'min' },
+              { value: 'hrs', label: 'hrs' },
+            ],
+            unitId: 'lv-contact-unit',
+            unitValue: 'sec',
+            solved: true,
+            help: 'Time for fluid to travel the line: length ÷ velocity.',
+          })}
+        </div>
+
+        <div id="gas-velocity-panel" class="embedded-calc" hidden>
+          ${sectionTitle('Gas Velocity')}
+          ${field('Gas rate', {
+            id: 'gv-rate',
+            value: 500,
+            min: '0',
+            unitOptions: [
+              { value: 'MCFD', label: 'MCFD' },
+              { value: 'MMCFD', label: 'MMCFD' },
+              { value: 'M3/Day', label: 'm³/Day' },
+            ],
+            unitId: 'gv-rate-unit',
+            unitValue: 'MCFD',
+            solveKey: 'rate',
+          })}
+          ${field('Diameter', {
+            id: 'gv-dia',
+            value: 8,
+            min: '0',
+            unitOptions: [
+              { value: 'in', label: 'in' },
+              { value: 'mm', label: 'mm' },
+            ],
+            unitId: 'gv-dia-unit',
+            unitValue: 'in',
+            solveKey: 'dia',
+          })}
+          ${field('Line pressure', {
+            id: 'gv-psig',
+            value: 105.3,
+            min: '0',
+            unit: 'psig',
+            solveKey: 'psig',
+          })}
+          ${field('Temperature', {
+            id: 'gv-tempF',
+            value: 60,
+            unit: '°F',
+          })}
+          ${field('Gas compressibility Z', {
+            id: 'gv-z',
+            value: 1,
+            min: '0',
+            step: '0.01',
+            unit: '—',
+          })}
+          ${field('Velocity', {
+            id: 'gv-vel',
+            value: '',
+            min: '0',
+            unitOptions: [
+              { value: 'ft/sec', label: 'ft/sec' },
+              { value: 'm/sec', label: 'm/sec' },
+            ],
+            unitId: 'gv-vel-unit',
+            unitValue: 'ft/sec',
+            solveKey: 'vel',
+            solved: true,
+          })}
+          ${field('Line length', {
+            id: 'gv-len',
+            value: 5280,
+            min: '0',
+            unitOptions: [
+              { value: 'ft', label: 'ft' },
+              { value: 'm', label: 'm' },
+              { value: 'km', label: 'km' },
+            ],
+            unitId: 'gv-len-unit',
+            unitValue: 'ft',
+            help: 'Pipe or line length used with velocity to compute contact (residence) time.',
+          })}
+          ${field('Contact time', {
+            id: 'gv-contact',
+            value: '',
+            min: '0',
+            unitOptions: [
+              { value: 'sec', label: 'sec' },
+              { value: 'min', label: 'min' },
+              { value: 'hrs', label: 'hrs' },
+            ],
+            unitId: 'gv-contact-unit',
+            unitValue: 'sec',
+            solved: true,
+            help: 'Time for fluid to travel the line: length ÷ velocity.',
+          })}
+        </div>
       </form>
     `,
     true,
   )
   wireBack()
-  wireSolveForm(
-    'rate',
-    ['ppm', 'bbls', 'rate', 'vol-unit', 'rate-unit'],
-    (solveFor) => {
-      const ppmEl = app.querySelector<HTMLInputElement>('#ppm')!
-      const bblsEl = app.querySelector<HTMLInputElement>('#bbls')!
-      const rateEl = app.querySelector<HTMLInputElement>('#rate')!
-      const volUnit = (app.querySelector('#vol-unit') as HTMLSelectElement)
-        .value as VolUnit
-      const rateUnit = (app.querySelector('#rate-unit') as HTMLSelectElement)
-        .value as RateUnit
-      const bblsPerDay = toBbls(num(bblsEl), volUnit)
+  wireFieldHelp()
 
-      if (solveFor === 'rate') {
-        setNum(rateEl, dosageRate(num(ppmEl), bblsPerDay, rateUnit))
-      } else if (solveFor === 'ppm') {
-        const gpd = rateToGalsPerDay(num(rateEl), rateUnit)
-        setNum(ppmEl, dosagePpm(gpd, bblsPerDay))
-      } else {
-        const gpd = rateToGalsPerDay(num(rateEl), rateUnit)
-        setNum(bblsEl, fromBbls(dosageBblsPerDay(gpd, num(ppmEl)), volUnit))
-      }
-    },
-  )
+  const dosageRoot = app.querySelector('#dosage-fields')!
+  const liquidPanel = app.querySelector<HTMLElement>('#liquid-velocity-panel')!
+  const gasPanel = app.querySelector<HTMLElement>('#gas-velocity-panel')!
+  const includeLiquid = app.querySelector<HTMLInputElement>('#include-liquid')!
+  const includeGas = app.querySelector<HTMLInputElement>('#include-gas')!
+
+  const computeDosage = (solveFor: string) => {
+    const ppmEl = app.querySelector<HTMLInputElement>('#ppm')!
+    const bblsEl = app.querySelector<HTMLInputElement>('#bbls')!
+    const rateEl = app.querySelector<HTMLInputElement>('#rate')!
+    const volUnit = (app.querySelector('#vol-unit') as HTMLSelectElement)
+      .value as VolUnit
+    const rateUnit = (app.querySelector('#rate-unit') as HTMLSelectElement)
+      .value as RateUnit
+    const bblsPerDay = toBbls(num(bblsEl), volUnit)
+
+    if (solveFor === 'rate') {
+      setNum(rateEl, dosageRate(num(ppmEl), bblsPerDay, rateUnit))
+    } else if (solveFor === 'ppm') {
+      const gpd = rateToGalsPerDay(num(rateEl), rateUnit)
+      setNum(ppmEl, dosagePpm(gpd, bblsPerDay))
+    } else {
+      const gpd = rateToGalsPerDay(num(rateEl), rateUnit)
+      setNum(bblsEl, fromBbls(dosageBblsPerDay(gpd, num(ppmEl)), volUnit))
+    }
+  }
+
+  const computeLiquid = (solveFor: string) => {
+    const bblsEl = app.querySelector<HTMLInputElement>('#bbls')!
+    const diaEl = app.querySelector<HTMLInputElement>('#lv-dia')!
+    const velEl = app.querySelector<HTMLInputElement>('#lv-vel')!
+    const lenEl = app.querySelector<HTMLInputElement>('#lv-len')!
+    const contactEl = app.querySelector<HTMLInputElement>('#lv-contact')!
+    const volUnit = (app.querySelector('#vol-unit') as HTMLSelectElement)
+      .value as VolUnit
+    const diaUnit = (app.querySelector('#lv-dia-unit') as HTMLSelectElement)
+      .value as DiaUnit
+    const velUnit = (app.querySelector('#lv-vel-unit') as HTMLSelectElement)
+      .value as VelUnit
+    const lenUnit = (app.querySelector('#lv-len-unit') as HTMLSelectElement)
+      .value as LenUnit
+    const contactUnit = (
+      app.querySelector('#lv-contact-unit') as HTMLSelectElement
+    ).value as TimeUnit
+    const bblsPerDay = toBbls(num(bblsEl), volUnit)
+
+    let fps: number
+    if (solveFor === 'vel') {
+      fps = liquidVelocityFps(bblsPerDay, toInches(num(diaEl), diaUnit))
+      setNum(velEl, fromFps(fps, velUnit))
+    } else {
+      // Solve for diameter from volume + velocity (volume stays with dosage).
+      fps = toFps(num(velEl), velUnit)
+      const diaIn = liquidDiameterIn(bblsPerDay, fps)
+      setNum(diaEl, fromInches(diaIn, diaUnit))
+    }
+
+    setNum(
+      contactEl,
+      fromSeconds(
+        contactTimeSec(toFeet(num(lenEl), lenUnit), fps),
+        contactUnit,
+      ),
+    )
+  }
+
+  const computeGas = (solveFor: string) => {
+    const rateEl = app.querySelector<HTMLInputElement>('#gv-rate')!
+    const diaEl = app.querySelector<HTMLInputElement>('#gv-dia')!
+    const psigEl = app.querySelector<HTMLInputElement>('#gv-psig')!
+    const tempFEl = app.querySelector<HTMLInputElement>('#gv-tempF')!
+    const zEl = app.querySelector<HTMLInputElement>('#gv-z')!
+    const velEl = app.querySelector<HTMLInputElement>('#gv-vel')!
+    const lenEl = app.querySelector<HTMLInputElement>('#gv-len')!
+    const contactEl = app.querySelector<HTMLInputElement>('#gv-contact')!
+    const rateUnit = (app.querySelector('#gv-rate-unit') as HTMLSelectElement)
+      .value as GasRateUnit
+    const diaUnit = (app.querySelector('#gv-dia-unit') as HTMLSelectElement)
+      .value as DiaUnit
+    const velUnit = (app.querySelector('#gv-vel-unit') as HTMLSelectElement)
+      .value as VelUnit
+    const lenUnit = (app.querySelector('#gv-len-unit') as HTMLSelectElement)
+      .value as LenUnit
+    const contactUnit = (
+      app.querySelector('#gv-contact-unit') as HTMLSelectElement
+    ).value as TimeUnit
+    const tempF = num(tempFEl)
+    const z = num(zEl)
+
+    let fps: number
+    if (solveFor === 'vel') {
+      fps = gasVelocityFps(
+        toMcfd(num(rateEl), rateUnit),
+        toInches(num(diaEl), diaUnit),
+        num(psigEl),
+        tempF,
+        z,
+      )
+      setNum(velEl, fromFps(fps, velUnit))
+    } else if (solveFor === 'rate') {
+      fps = toFps(num(velEl), velUnit)
+      const mcfd = gasRateMcfdFromVelocity(
+        fps,
+        toInches(num(diaEl), diaUnit),
+        num(psigEl),
+        tempF,
+        z,
+      )
+      setNum(rateEl, fromMcfd(mcfd, rateUnit))
+    } else if (solveFor === 'dia') {
+      fps = toFps(num(velEl), velUnit)
+      const diaIn = gasDiameterIn(
+        toMcfd(num(rateEl), rateUnit),
+        fps,
+        num(psigEl),
+        tempF,
+        z,
+      )
+      setNum(diaEl, fromInches(diaIn, diaUnit))
+    } else {
+      fps = toFps(num(velEl), velUnit)
+      setNum(
+        psigEl,
+        gasPressurePsig(
+          toMcfd(num(rateEl), rateUnit),
+          toInches(num(diaEl), diaUnit),
+          fps,
+          tempF,
+          z,
+        ),
+      )
+    }
+
+    setNum(
+      contactEl,
+      fromSeconds(
+        contactTimeSec(toFeet(num(lenEl), lenUnit), fps),
+        contactUnit,
+      ),
+    )
+  }
+
+  let dosageSolve = 'rate'
+  let liquidSolve = 'vel'
+  let gasSolve = 'vel'
+
+  const runAll = () => {
+    computeDosage(dosageSolve)
+    if (!liquidPanel.hidden) computeLiquid(liquidSolve)
+    if (!gasPanel.hidden) computeGas(gasSolve)
+  }
+
+  const wireScopedSolve = (
+    root: ParentNode,
+    defaultSolve: string,
+    setSolve: (key: string) => void,
+  ) => {
+    let solveFor = defaultSolve
+    const applySolveUi = () => {
+      root.querySelectorAll<HTMLElement>('.field[data-field]').forEach((wrap) => {
+        const check = wrap.querySelector<HTMLInputElement>('.solve-check')
+        if (!check) return
+        const key = wrap.dataset.field!
+        const isSolved = key === solveFor
+        wrap.classList.toggle('is-solved', isSolved)
+        const input = wrap.querySelector<HTMLInputElement>('input.num-input')
+        if (input) {
+          input.readOnly = isSolved
+          if (isSolved) input.tabIndex = -1
+          else input.removeAttribute('tabindex')
+        }
+        check.checked = isSolved
+      })
+      setSolve(solveFor)
+    }
+
+    root.querySelectorAll<HTMLInputElement>('.solve-check').forEach((check) => {
+      check.addEventListener('change', () => {
+        if (check.checked) {
+          solveFor = check.dataset.solve!
+        } else if (check.dataset.solve === solveFor) {
+          check.checked = true
+          return
+        }
+        applySolveUi()
+        runAll()
+      })
+    })
+
+    applySolveUi()
+  }
+
+  wireScopedSolve(dosageRoot, 'rate', (k) => {
+    dosageSolve = k
+  })
+  wireScopedSolve(liquidPanel, 'vel', (k) => {
+    liquidSolve = k
+  })
+  wireScopedSolve(gasPanel, 'vel', (k) => {
+    gasSolve = k
+  })
+
+  const syncPanels = () => {
+    liquidPanel.hidden = !includeLiquid.checked
+    gasPanel.hidden = !includeGas.checked
+    runAll()
+  }
+
+  includeLiquid.addEventListener('change', () => {
+    if (includeLiquid.checked) includeGas.checked = false
+    syncPanels()
+  })
+  includeGas.addEventListener('change', () => {
+    if (includeGas.checked) includeLiquid.checked = false
+    syncPanels()
+  })
+
+  const inputIds = [
+    'ppm',
+    'bbls',
+    'rate',
+    'vol-unit',
+    'rate-unit',
+    'lv-dia',
+    'lv-vel',
+    'lv-len',
+    'lv-dia-unit',
+    'lv-vel-unit',
+    'lv-len-unit',
+    'lv-contact-unit',
+    'gv-rate',
+    'gv-rate-unit',
+    'gv-dia',
+    'gv-dia-unit',
+    'gv-psig',
+    'gv-tempF',
+    'gv-z',
+    'gv-vel',
+    'gv-vel-unit',
+    'gv-len',
+    'gv-len-unit',
+    'gv-contact-unit',
+  ]
+  for (const id of inputIds) {
+    const el = app.querySelector<HTMLInputElement | HTMLSelectElement>(`#${id}`)
+    el?.addEventListener('input', runAll)
+    el?.addEventListener('change', runAll)
+    if (el instanceof HTMLInputElement && el.classList.contains('num-input')) {
+      el.addEventListener('blur', () => {
+        formatNumInput(el)
+        runAll()
+      })
+    }
+  }
+
+  runAll()
 }
 
 function renderDisplacement(): void {
