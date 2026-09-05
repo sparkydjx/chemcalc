@@ -352,6 +352,79 @@ input[type='text'][readonly]:not(.num-input) {
   border-top: none;
 }
 
+.include-options {
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+  margin: 0.15rem 0 0.35rem;
+}
+
+.include-option {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.55rem;
+  padding: 0.65rem 0.75rem;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--surface);
+  cursor: pointer;
+  user-select: none;
+}
+
+.include-option:hover {
+  background: var(--accent-soft);
+}
+
+.include-option:has(input:checked) {
+  border-color: rgba(13, 115, 119, 0.45);
+  background: var(--accent-soft);
+}
+
+.include-option input {
+  width: 1.1rem;
+  height: 1.1rem;
+  margin: 0.15rem 0 0;
+  flex: 0 0 auto;
+  accent-color: var(--accent);
+  cursor: pointer;
+}
+
+.include-option-text {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  min-width: 0;
+}
+
+.include-option-label {
+  font-size: 0.95rem;
+  font-weight: 650;
+  color: var(--ink);
+}
+
+.include-option-help {
+  font-size: 0.8rem;
+  color: var(--muted);
+  line-height: 1.35;
+}
+
+.embedded-calc {
+  display: flex;
+  flex-direction: column;
+  gap: 0.85rem;
+}
+
+.embedded-calc[hidden] {
+  display: none;
+}
+
+.embed-note {
+  margin: -0.35rem 0 0;
+  color: var(--muted);
+  font-size: 0.82rem;
+  line-height: 1.35;
+}
+
 .field.is-solved .field-label,
 .field.is-solved .solve-toggle {
   color: var(--accent-deep);
