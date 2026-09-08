@@ -3,6 +3,9 @@ import {
   dosageRate,
   dosagePpm,
   dosageBblsPerDay,
+  milsFilm,
+  milsFilmDiameterIn,
+  milsFilmLengthMiles,
   displacementWithEndCapsBbls,
   displacementDiameterInWithEndCaps,
   displacementLengthFtWithEndCaps,
@@ -97,7 +100,8 @@ const CALCS: { id: Exclude<CalcId, 'home'>; title: string; blurb: string }[] = [
   {
     id: 'pipeline-dosage',
     title: 'Pipeline Dosage Calculation',
-    blurb: 'PPM, barrels/day, and injection rate — optionally with liquid or gas velocity',
+    blurb:
+      'PPM, injection rate, mils film from diameter × length — optionally with velocity',
   },
   {
     id: 'displacement',
@@ -431,7 +435,9 @@ function includeOption(id: string, label: string, help?: string): string {
 
 function renderDosage(
   title: string = 'Production Dosage Calculation',
+  opts: { milsFilm?: boolean } = {},
 ): void {
+  const showMilsFilm = opts.milsFilm === true
   app.innerHTML = shell(
     title,
     `
@@ -480,6 +486,53 @@ function renderDosage(
             solved: true,
           })}
         </div>
+
+        ${
+          showMilsFilm
+            ? `
+        ${sectionTitle('Mils film')}
+        <div id="mils-film-fields">
+          ${field('Pipeline diameter', {
+            id: 'mf-dia',
+            value: 12,
+            min: '0',
+            unitOptions: [
+              { value: 'in', label: 'in' },
+              { value: 'mm', label: 'mm' },
+            ],
+            unitId: 'mf-dia-unit',
+            unitValue: 'in',
+            solveKey: 'dia',
+            help: 'Inside diameter of the pipeline. Formula uses inches.',
+          })}
+          ${field('Pipeline length', {
+            id: 'mf-len',
+            value: 1,
+            min: '0',
+            unitOptions: [
+              { value: 'miles', label: 'miles' },
+              { value: 'km', label: 'km' },
+              { value: 'ft', label: 'ft' },
+              { value: 'm', label: 'm' },
+            ],
+            unitId: 'mf-len-unit',
+            unitValue: 'miles',
+            solveKey: 'len',
+            help: 'Pipeline length. Formula uses miles: diameter (in) × length (miles) × 0.862.',
+          })}
+          ${field('Mils film', {
+            id: 'mf-mils',
+            value: '',
+            min: '0',
+            unit: 'mils',
+            solveKey: 'mils',
+            solved: true,
+            help: 'Film thickness in thousandths of an inch: diameter (in) × length (miles) × 0.862.',
+          })}
+        </div>
+        `
+            : ''
+        }
 
         ${sectionTitle('Velocity')}
         <div class="include-options" role="group" aria-label="Include velocity calculator">
@@ -647,6 +700,9 @@ function renderDosage(
   wireFieldHelp()
 
   const dosageRoot = app.querySelector('#dosage-fields')!
+  const milsFilmRoot = showMilsFilm
+    ? app.querySelector('#mils-film-fields')
+    : null
   const liquidPanel = app.querySelector<HTMLElement>('#liquid-velocity-panel')!
   const gasPanel = app.querySelector<HTMLElement>('#gas-velocity-panel')!
   const includeLiquid = app.querySelector<HTMLInputElement>('#include-liquid')!
@@ -670,6 +726,29 @@ function renderDosage(
     } else {
       const gpd = rateToGalsPerDay(num(rateEl), rateUnit)
       setNum(bblsEl, fromBbls(dosageBblsPerDay(gpd, num(ppmEl)), volUnit))
+    }
+  }
+
+  const computeMilsFilm = (solveFor: string) => {
+    const diaEl = app.querySelector<HTMLInputElement>('#mf-dia')!
+    const lenEl = app.querySelector<HTMLInputElement>('#mf-len')!
+    const milsEl = app.querySelector<HTMLInputElement>('#mf-mils')!
+    const diaUnit = (app.querySelector('#mf-dia-unit') as HTMLSelectElement)
+      .value as DiaUnit
+    const lenUnit = (app.querySelector('#mf-len-unit') as HTMLSelectElement)
+      .value as LenUnit
+
+    if (solveFor === 'mils') {
+      const diaIn = toInches(num(diaEl), diaUnit)
+      const miles = toFeet(num(lenEl), lenUnit) / 5280
+      setNum(milsEl, milsFilm(diaIn, miles))
+    } else if (solveFor === 'dia') {
+      const miles = toFeet(num(lenEl), lenUnit) / 5280
+      setNum(diaEl, fromInches(milsFilmDiameterIn(num(milsEl), miles), diaUnit))
+    } else {
+      const diaIn = toInches(num(diaEl), diaUnit)
+      const miles = milsFilmLengthMiles(num(milsEl), diaIn)
+      setNum(lenEl, fromFeet(miles * 5280, lenUnit))
     }
   }
 
@@ -789,11 +868,13 @@ function renderDosage(
   }
 
   let dosageSolve = 'rate'
+  let milsFilmSolve = 'mils'
   let liquidSolve = 'vel'
   let gasSolve = 'vel'
 
   const runAll = () => {
     computeDosage(dosageSolve)
+    if (showMilsFilm) computeMilsFilm(milsFilmSolve)
     if (!liquidPanel.hidden) computeLiquid(liquidSolve)
     if (!gasPanel.hidden) computeGas(gasSolve)
   }
@@ -841,6 +922,11 @@ function renderDosage(
   wireScopedSolve(dosageRoot, 'rate', (k) => {
     dosageSolve = k
   })
+  if (milsFilmRoot) {
+    wireScopedSolve(milsFilmRoot, 'mils', (k) => {
+      milsFilmSolve = k
+    })
+  }
   wireScopedSolve(liquidPanel, 'vel', (k) => {
     liquidSolve = k
   })
@@ -869,6 +955,11 @@ function renderDosage(
     'rate',
     'vol-unit',
     'rate-unit',
+    'mf-dia',
+    'mf-len',
+    'mf-mils',
+    'mf-dia-unit',
+    'mf-len-unit',
     'lv-dia',
     'lv-vel',
     'lv-len',
@@ -2836,7 +2927,7 @@ function navigate(id: CalcId): void {
       renderDosage('Production Dosage Calculation')
       break
     case 'pipeline-dosage':
-      renderDosage('Pipeline Dosage Calculation')
+      renderDosage('Pipeline Dosage Calculation', { milsFilm: true })
       break
     case 'displacement':
       renderDisplacement()

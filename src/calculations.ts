@@ -60,6 +60,36 @@ export function dosageBblsPerDay(galsPerDay: number, targetPpm: number): number 
   return (galsPerDay * 1_000_000) / (targetPpm * 42)
 }
 
+/**
+ * Pipeline mils film factor: diameter (in) × length (miles) × 0.862 = mils
+ * (thousandths of an inch of film).
+ */
+export const MILS_FILM_FACTOR = 0.862
+
+/** Pipeline diameter (in) × length (miles) × 0.862 → mils film. */
+export function milsFilm(
+  diameterIn: number,
+  lengthMiles: number,
+): number {
+  return diameterIn * lengthMiles * MILS_FILM_FACTOR
+}
+
+/** Solve mils film for pipeline diameter (in). */
+export function milsFilmDiameterIn(
+  mils: number,
+  lengthMiles: number,
+): number {
+  return mils / (lengthMiles * MILS_FILM_FACTOR)
+}
+
+/** Solve mils film for pipeline length (miles). */
+export function milsFilmLengthMiles(
+  mils: number,
+  diameterIn: number,
+): number {
+  return mils / (diameterIn * MILS_FILM_FACTOR)
+}
+
 /** US gal per ft³ used by the displacement (and related) formulas. */
 const DISP_GAL_PER_FT3 = 7.4805
 
