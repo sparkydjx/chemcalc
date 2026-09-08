@@ -90,7 +90,7 @@ type CalcId =
 const CALCS: { id: Exclude<CalcId, 'home'>; title: string; blurb: string }[] = [
   {
     id: 'dosage',
-    title: 'Dosage Calculation',
+    title: 'Production Dosage Calculation',
     blurb: 'PPM, barrels/day, and injection rate — optionally with liquid or gas velocity',
   },
   {
@@ -425,7 +425,7 @@ function includeOption(id: string, label: string, help?: string): string {
 
 function renderDosage(): void {
   app.innerHTML = shell(
-    'Dosage Calculation',
+    'Production Dosage Calculation',
     `
       <form class="calc-form" id="form">
         <div id="dosage-fields">
