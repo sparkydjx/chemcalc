@@ -78,6 +78,7 @@ import {
 type CalcId =
   | 'home'
   | 'dosage'
+  | 'pipeline-dosage'
   | 'displacement'
   | 'liquid-velocity'
   | 'gas-velocity'
@@ -91,6 +92,11 @@ const CALCS: { id: Exclude<CalcId, 'home'>; title: string; blurb: string }[] = [
   {
     id: 'dosage',
     title: 'Production Dosage Calculation',
+    blurb: 'PPM, barrels/day, and injection rate — optionally with liquid or gas velocity',
+  },
+  {
+    id: 'pipeline-dosage',
+    title: 'Pipeline Dosage Calculation',
     blurb: 'PPM, barrels/day, and injection rate — optionally with liquid or gas velocity',
   },
   {
@@ -423,9 +429,11 @@ function includeOption(id: string, label: string, help?: string): string {
   `
 }
 
-function renderDosage(): void {
+function renderDosage(
+  title: string = 'Production Dosage Calculation',
+): void {
   app.innerHTML = shell(
-    'Production Dosage Calculation',
+    title,
     `
       <form class="calc-form" id="form">
         <div id="dosage-fields">
@@ -2825,7 +2833,10 @@ function navigate(id: CalcId): void {
   history.replaceState(null, '', id === 'home' ? '#' : `#${id}`)
   switch (id) {
     case 'dosage':
-      renderDosage()
+      renderDosage('Production Dosage Calculation')
+      break
+    case 'pipeline-dosage':
+      renderDosage('Pipeline Dosage Calculation')
       break
     case 'displacement':
       renderDisplacement()
