@@ -7,6 +7,7 @@ import {
   milsDosageTargetMils,
   milsDosageDiameterIn,
   milsDosageLengthMiles,
+  displacementBbls,
   displacementWithEndCapsBbls,
   displacementDiameterInWithEndCaps,
   displacementLengthFtWithEndCaps,
@@ -102,7 +103,7 @@ const CALCS: { id: Exclude<CalcId, 'home'>; title: string; blurb: string }[] = [
     id: 'pipeline-dosage',
     title: 'Pipeline Dosage Calculation',
     blurb:
-      'PPM, injection rate, mils dosage (length × diameter × target mils → gallons) — optionally with velocity',
+      'PPM and injection rate from line volume (diameter × length), plus mils dosage — optionally with velocity',
   },
   {
     id: 'displacement',
@@ -451,19 +452,36 @@ function renderDosage(
             unit: 'PPM',
             solveKey: 'ppm',
           })}
-          ${field('Volume', {
-            id: 'bbls',
-            value: 100,
-            min: '0',
-            unitOptions: [
-              { value: 'Bbls', label: 'Bbls/Day' },
-              { value: 'm3', label: 'm³/Day' },
-            ],
-            unitId: 'vol-unit',
-            unitValue: 'Bbls',
-            solveKey: 'bbls',
-            help: 'Treated fluid volume rate. When Liquid Velocity is included, this is also the flow rate used for velocity and contact time.',
-          })}
+          ${
+            showMilsFilm
+              ? field('Volume', {
+                  id: 'bbls',
+                  value: '',
+                  min: '0',
+                  unitOptions: [
+                    { value: 'Bbls', label: 'Bbls' },
+                    { value: 'Gals', label: 'Gals' },
+                    { value: 'm3', label: 'm³' },
+                  ],
+                  unitId: 'vol-unit',
+                  unitValue: 'Bbls',
+                  solved: true,
+                  help: 'Line fill volume from Diameter and Line length in the Pipeline section: (ID/24)² × length (ft) × 7.4805 / 42 × π. Used for PPM dosage.',
+                })
+              : field('Volume', {
+                  id: 'bbls',
+                  value: 100,
+                  min: '0',
+                  unitOptions: [
+                    { value: 'Bbls', label: 'Bbls/Day' },
+                    { value: 'm3', label: 'm³/Day' },
+                  ],
+                  unitId: 'vol-unit',
+                  unitValue: 'Bbls',
+                  solveKey: 'bbls',
+                  help: 'Treated fluid volume rate. When Liquid Velocity is included, this is also the flow rate used for velocity and contact time.',
+                })
+          }
           ${field('Injection rate', {
             id: 'rate',
             value: '',
@@ -504,7 +522,7 @@ function renderDosage(
             unitId: 'mf-dia-unit',
             unitValue: 'in',
             solveKey: 'dia',
-            help: 'Inside diameter of the pipeline. Used for mils dosage and for liquid or gas velocity when included. Formula uses inches.',
+            help: 'Inside diameter of the pipeline. Used for line volume (PPM dosage), mils dosage, and liquid or gas velocity when included. Formula uses inches.',
           })}
           ${field('Line length', {
             id: 'mf-len',
@@ -519,7 +537,7 @@ function renderDosage(
             unitId: 'mf-len-unit',
             unitValue: 'miles',
             solveKey: 'len',
-            help: 'Pipeline length. Used for mils dosage and contact time when velocity is included. Formula uses miles: length (miles) × diameter (in) × target mils = gallons.',
+            help: 'Pipeline length. Used for line volume (PPM dosage), mils dosage, and contact time when velocity is included. Mils formula uses miles: length (miles) × diameter (in) × target mils = gallons.',
           })}
           ${field('Target mils', {
             id: 'mf-mils',
@@ -549,7 +567,7 @@ function renderDosage(
             'include-liquid',
             'Liquid Velocity',
             showMilsFilm
-              ? 'Velocity and contact time from Volume and the diameter/length above'
+              ? 'Velocity and contact time from a liquid flow rate and the diameter/length above'
               : 'Pipe diameter, velocity, and contact time from the volume above',
           )}
           ${includeOption(
@@ -565,12 +583,23 @@ function renderDosage(
           ${sectionTitle('Liquid Velocity')}
           <p class="embed-note">${
             showMilsFilm
-              ? 'Uses Volume above as liquid flow rate, and Diameter / Line length from the Pipeline section.'
+              ? 'Uses its own Flow rate below, and Diameter / Line length from the Pipeline section. (Volume above is line fill for PPM, not a daily rate.)'
               : 'Uses Volume above as liquid flow rate.'
           }</p>
           ${
             showMilsFilm
-              ? ''
+              ? field('Flow rate', {
+                  id: 'lv-rate',
+                  value: 100,
+                  min: '0',
+                  unitOptions: [
+                    { value: 'Bbls', label: 'Bbls/Day' },
+                    { value: 'm3', label: 'm³/Day' },
+                  ],
+                  unitId: 'lv-rate-unit',
+                  unitValue: 'Bbls',
+                  help: 'Liquid flow rate for velocity. Separate from line fill Volume used for PPM dosage.',
+                })
               : field('Diameter', {
                   id: 'lv-dia',
                   value: 12,
@@ -748,6 +777,23 @@ function renderDosage(
   const includeLiquid = app.querySelector<HTMLInputElement>('#include-liquid')!
   const includeGas = app.querySelector<HTMLInputElement>('#include-gas')!
 
+  const computePipelineVolume = () => {
+    const bblsEl = app.querySelector<HTMLInputElement>('#bbls')!
+    const diaEl = app.querySelector<HTMLInputElement>('#mf-dia')!
+    const lenEl = app.querySelector<HTMLInputElement>('#mf-len')!
+    const volUnit = (app.querySelector('#vol-unit') as HTMLSelectElement)
+      .value as VolUnit
+    const diaUnit = (app.querySelector('#mf-dia-unit') as HTMLSelectElement)
+      .value as DiaUnit
+    const lenUnit = (app.querySelector('#mf-len-unit') as HTMLSelectElement)
+      .value as LenUnit
+    const bbls = displacementBbls(
+      toInches(num(diaEl), diaUnit),
+      toFeet(num(lenEl), lenUnit),
+    )
+    setNum(bblsEl, fromBbls(bbls, volUnit))
+  }
+
   const computeDosage = (solveFor: string) => {
     const ppmEl = app.querySelector<HTMLInputElement>('#ppm')!
     const bblsEl = app.querySelector<HTMLInputElement>('#bbls')!
@@ -758,9 +804,13 @@ function renderDosage(
       .value as RateUnit
     const bblsPerDay = toBbls(num(bblsEl), volUnit)
 
-    if (solveFor === 'rate') {
+    // Pipeline dosage: volume is always from diameter × length (never solved here).
+    const dosageSolveFor =
+      showMilsFilm && solveFor === 'bbls' ? 'rate' : solveFor
+
+    if (dosageSolveFor === 'rate') {
       setNum(rateEl, dosageRate(num(ppmEl), bblsPerDay, rateUnit))
-    } else if (solveFor === 'ppm') {
+    } else if (dosageSolveFor === 'ppm') {
       const gpd = rateToGalsPerDay(num(rateEl), rateUnit)
       setNum(ppmEl, dosagePpm(gpd, bblsPerDay))
     } else {
@@ -804,7 +854,9 @@ function renderDosage(
   }
 
   const computeLiquid = (solveFor: string) => {
-    const bblsEl = app.querySelector<HTMLInputElement>('#bbls')!
+    const rateId = showMilsFilm ? 'lv-rate' : 'bbls'
+    const rateUnitId = showMilsFilm ? 'lv-rate-unit' : 'vol-unit'
+    const rateEl = app.querySelector<HTMLInputElement>(`#${rateId}`)!
     const diaId = showMilsFilm ? 'mf-dia' : 'lv-dia'
     const diaUnitId = showMilsFilm ? 'mf-dia-unit' : 'lv-dia-unit'
     const lenId = showMilsFilm ? 'mf-len' : 'lv-len'
@@ -813,7 +865,7 @@ function renderDosage(
     const velEl = app.querySelector<HTMLInputElement>('#lv-vel')!
     const lenEl = app.querySelector<HTMLInputElement>(`#${lenId}`)!
     const contactEl = app.querySelector<HTMLInputElement>('#lv-contact')!
-    const volUnit = (app.querySelector('#vol-unit') as HTMLSelectElement)
+    const volUnit = (app.querySelector(`#${rateUnitId}`) as HTMLSelectElement)
       .value as VolUnit
     const diaUnit = (app.querySelector(`#${diaUnitId}`) as HTMLSelectElement)
       .value as DiaUnit
@@ -824,7 +876,7 @@ function renderDosage(
     const contactUnit = (
       app.querySelector('#lv-contact-unit') as HTMLSelectElement
     ).value as TimeUnit
-    const bblsPerDay = toBbls(num(bblsEl), volUnit)
+    const bblsPerDay = toBbls(num(rateEl), volUnit)
 
     let fps: number
     // Shared pipeline diameter is owned by the Pipeline section; only solve velocity here.
@@ -936,8 +988,10 @@ function renderDosage(
   let gasSolve = 'vel'
 
   const runAll = () => {
-    computeDosage(dosageSolve)
+    // Mils may solve for diameter/length; derive line volume before PPM dosage.
     if (showMilsFilm) computeMilsFilm(milsFilmSolve)
+    if (showMilsFilm) computePipelineVolume()
+    computeDosage(dosageSolve)
     if (!liquidPanel.hidden) computeLiquid(liquidSolve)
     if (!gasPanel.hidden) computeGas(gasSolve)
   }
@@ -1024,6 +1078,8 @@ function renderDosage(
     'mf-gals',
     'mf-dia-unit',
     'mf-len-unit',
+    'lv-rate',
+    'lv-rate-unit',
     'lv-dia',
     'lv-vel',
     'lv-len',
