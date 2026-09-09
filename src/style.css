@@ -268,6 +268,10 @@ body {
   user-select: none;
 }
 
+.solve-toggle[hidden] {
+  display: none;
+}
+
 .solve-toggle input {
   width: 1.05rem;
   height: 1.05rem;
@@ -342,6 +346,30 @@ input[type='text'][readonly]:not(.num-input) {
 .field#holdup-field:not(.is-holdup-active) .num-input:disabled {
   color: var(--muted);
   cursor: default;
+}
+
+.mode-select {
+  min-width: min(100%, 16rem);
+  flex: 1;
+}
+
+.mode-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 0.85rem;
+  margin: 0.15rem 0 0;
+  padding: 0.15rem 0 0.15rem 0.85rem;
+  border-left: 2px solid rgba(13, 115, 119, 0.28);
+}
+
+.mode-panel[hidden] {
+  display: none;
+}
+
+.mode-panel .form-section-title {
+  margin-top: 0;
+  padding-top: 0;
+  border-top: none;
 }
 
 .form-section-title {
