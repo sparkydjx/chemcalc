@@ -467,7 +467,7 @@ function renderDosage(
                   unitId: 'vol-unit',
                   unitValue: 'Bbls',
                   solveKey: 'bbls',
-                  help: 'Line fill volume from Diameter and Line length in the Pipeline section: (ID/24)² × length (ft) × 7.4805 / 42 × π. Used for PPM dosage. Check Solve to find volume from geometry.',
+                  help: 'Line fill volume from Diameter and Line length: (ID/24)² × length (ft) × 7.4805 / 42 × π. Check Solve to find volume from geometry.',
                 })
               : field('Volume', {
                   id: 'bbls',
@@ -987,25 +987,13 @@ function renderDosage(
   let liquidSolve = 'vel'
   let gasSolve = 'vel'
 
-  const lockPipelineVolumeField = () => {
-    if (!showMilsFilm) return
-    const bblsEl = app.querySelector<HTMLInputElement>('#bbls')
-    const wrap = bblsEl?.closest<HTMLElement>('.field')
-    if (!bblsEl || !wrap) return
-    // Volume is always derived from diameter × length on pipeline dosage.
-    wrap.classList.add('is-solved')
-    bblsEl.readOnly = true
-    bblsEl.tabIndex = -1
-  }
-
   const runAll = () => {
-    // Mils may solve for diameter/length; derive line volume before PPM dosage.
+    // Mils may solve for diameter/length; keep line fill volume in sync for PPM.
     if (showMilsFilm) computeMilsFilm(milsFilmSolve)
     if (showMilsFilm) computePipelineVolume()
     computeDosage(dosageSolve)
     if (!liquidPanel.hidden) computeLiquid(liquidSolve)
     if (!gasPanel.hidden) computeGas(gasSolve)
-    lockPipelineVolumeField()
   }
 
   const wireScopedSolve = (
