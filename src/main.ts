@@ -491,9 +491,9 @@ function renderDosage(
         ${
           showMilsFilm
             ? `
-        ${sectionTitle('Mils dosage')}
+        ${sectionTitle('Pipeline')}
         <div id="mils-film-fields">
-          ${field('Pipeline diameter', {
+          ${field('Diameter', {
             id: 'mf-dia',
             value: 12,
             min: '0',
@@ -504,9 +504,9 @@ function renderDosage(
             unitId: 'mf-dia-unit',
             unitValue: 'in',
             solveKey: 'dia',
-            help: 'Inside diameter of the pipeline. Formula uses inches.',
+            help: 'Inside diameter of the pipeline. Used for mils dosage and for liquid or gas velocity when included. Formula uses inches.',
           })}
-          ${field('Pipeline length', {
+          ${field('Line length', {
             id: 'mf-len',
             value: 1,
             min: '0',
@@ -519,7 +519,7 @@ function renderDosage(
             unitId: 'mf-len-unit',
             unitValue: 'miles',
             solveKey: 'len',
-            help: 'Pipeline length. Formula uses miles: length (miles) × diameter (in) × target mils = gallons.',
+            help: 'Pipeline length. Used for mils dosage and contact time when velocity is included. Formula uses miles: length (miles) × diameter (in) × target mils = gallons.',
           })}
           ${field('Target mils', {
             id: 'mf-mils',
@@ -548,30 +548,42 @@ function renderDosage(
           ${includeOption(
             'include-liquid',
             'Liquid Velocity',
-            'Pipe diameter, velocity, and contact time from the volume above',
+            showMilsFilm
+              ? 'Velocity and contact time from Volume and the diameter/length above'
+              : 'Pipe diameter, velocity, and contact time from the volume above',
           )}
           ${includeOption(
             'include-gas',
             'Gas Velocity',
-            'Gas rate, pressure, diameter, velocity, and contact time',
+            showMilsFilm
+              ? 'Gas rate, pressure, velocity, and contact time using the diameter/length above'
+              : 'Gas rate, pressure, diameter, velocity, and contact time',
           )}
         </div>
 
         <div id="liquid-velocity-panel" class="embedded-calc" hidden>
           ${sectionTitle('Liquid Velocity')}
-          <p class="embed-note">Uses Volume above as liquid flow rate.</p>
-          ${field('Diameter', {
-            id: 'lv-dia',
-            value: 12,
-            min: '0',
-            unitOptions: [
-              { value: 'in', label: 'in' },
-              { value: 'mm', label: 'mm' },
-            ],
-            unitId: 'lv-dia-unit',
-            unitValue: 'in',
-            solveKey: 'dia',
-          })}
+          <p class="embed-note">${
+            showMilsFilm
+              ? 'Uses Volume above as liquid flow rate, and Diameter / Line length from the Pipeline section.'
+              : 'Uses Volume above as liquid flow rate.'
+          }</p>
+          ${
+            showMilsFilm
+              ? ''
+              : field('Diameter', {
+                  id: 'lv-dia',
+                  value: 12,
+                  min: '0',
+                  unitOptions: [
+                    { value: 'in', label: 'in' },
+                    { value: 'mm', label: 'mm' },
+                  ],
+                  unitId: 'lv-dia-unit',
+                  unitValue: 'in',
+                  solveKey: 'dia',
+                })
+          }
           ${field('Velocity', {
             id: 'lv-vel',
             value: '',
@@ -585,20 +597,24 @@ function renderDosage(
             solveKey: 'vel',
             solved: true,
           })}
-          ${field('Line length', {
-            id: 'lv-len',
-            value: 5280,
-            min: '0',
-            unitOptions: [
-              { value: 'ft', label: 'ft' },
-              { value: 'm', label: 'm' },
-              { value: 'km', label: 'km' },
-              { value: 'miles', label: 'miles' },
-            ],
-            unitId: 'lv-len-unit',
-            unitValue: 'ft',
-            help: 'Pipe or line length used with velocity to compute contact (residence) time.',
-          })}
+          ${
+            showMilsFilm
+              ? ''
+              : field('Line length', {
+                  id: 'lv-len',
+                  value: 5280,
+                  min: '0',
+                  unitOptions: [
+                    { value: 'ft', label: 'ft' },
+                    { value: 'm', label: 'm' },
+                    { value: 'km', label: 'km' },
+                    { value: 'miles', label: 'miles' },
+                  ],
+                  unitId: 'lv-len-unit',
+                  unitValue: 'ft',
+                  help: 'Pipe or line length used with velocity to compute contact (residence) time.',
+                })
+          }
           ${field('Contact time', {
             id: 'lv-contact',
             value: '',
@@ -617,6 +633,11 @@ function renderDosage(
 
         <div id="gas-velocity-panel" class="embedded-calc" hidden>
           ${sectionTitle('Gas Velocity')}
+          ${
+            showMilsFilm
+              ? `<p class="embed-note">Uses Diameter / Line length from the Pipeline section.</p>`
+              : ''
+          }
           ${field('Gas rate', {
             id: 'gv-rate',
             value: 500,
@@ -630,18 +651,22 @@ function renderDosage(
             unitValue: 'MCFD',
             solveKey: 'rate',
           })}
-          ${field('Diameter', {
-            id: 'gv-dia',
-            value: 8,
-            min: '0',
-            unitOptions: [
-              { value: 'in', label: 'in' },
-              { value: 'mm', label: 'mm' },
-            ],
-            unitId: 'gv-dia-unit',
-            unitValue: 'in',
-            solveKey: 'dia',
-          })}
+          ${
+            showMilsFilm
+              ? ''
+              : field('Diameter', {
+                  id: 'gv-dia',
+                  value: 8,
+                  min: '0',
+                  unitOptions: [
+                    { value: 'in', label: 'in' },
+                    { value: 'mm', label: 'mm' },
+                  ],
+                  unitId: 'gv-dia-unit',
+                  unitValue: 'in',
+                  solveKey: 'dia',
+                })
+          }
           ${field('Line pressure', {
             id: 'gv-psig',
             value: 105.3,
@@ -674,20 +699,24 @@ function renderDosage(
             solveKey: 'vel',
             solved: true,
           })}
-          ${field('Line length', {
-            id: 'gv-len',
-            value: 5280,
-            min: '0',
-            unitOptions: [
-              { value: 'ft', label: 'ft' },
-              { value: 'm', label: 'm' },
-              { value: 'km', label: 'km' },
-              { value: 'miles', label: 'miles' },
-            ],
-            unitId: 'gv-len-unit',
-            unitValue: 'ft',
-            help: 'Pipe or line length used with velocity to compute contact (residence) time.',
-          })}
+          ${
+            showMilsFilm
+              ? ''
+              : field('Line length', {
+                  id: 'gv-len',
+                  value: 5280,
+                  min: '0',
+                  unitOptions: [
+                    { value: 'ft', label: 'ft' },
+                    { value: 'm', label: 'm' },
+                    { value: 'km', label: 'km' },
+                    { value: 'miles', label: 'miles' },
+                  ],
+                  unitId: 'gv-len-unit',
+                  unitValue: 'ft',
+                  help: 'Pipe or line length used with velocity to compute contact (residence) time.',
+                })
+          }
           ${field('Contact time', {
             id: 'gv-contact',
             value: '',
@@ -776,17 +805,21 @@ function renderDosage(
 
   const computeLiquid = (solveFor: string) => {
     const bblsEl = app.querySelector<HTMLInputElement>('#bbls')!
-    const diaEl = app.querySelector<HTMLInputElement>('#lv-dia')!
+    const diaId = showMilsFilm ? 'mf-dia' : 'lv-dia'
+    const diaUnitId = showMilsFilm ? 'mf-dia-unit' : 'lv-dia-unit'
+    const lenId = showMilsFilm ? 'mf-len' : 'lv-len'
+    const lenUnitId = showMilsFilm ? 'mf-len-unit' : 'lv-len-unit'
+    const diaEl = app.querySelector<HTMLInputElement>(`#${diaId}`)!
     const velEl = app.querySelector<HTMLInputElement>('#lv-vel')!
-    const lenEl = app.querySelector<HTMLInputElement>('#lv-len')!
+    const lenEl = app.querySelector<HTMLInputElement>(`#${lenId}`)!
     const contactEl = app.querySelector<HTMLInputElement>('#lv-contact')!
     const volUnit = (app.querySelector('#vol-unit') as HTMLSelectElement)
       .value as VolUnit
-    const diaUnit = (app.querySelector('#lv-dia-unit') as HTMLSelectElement)
+    const diaUnit = (app.querySelector(`#${diaUnitId}`) as HTMLSelectElement)
       .value as DiaUnit
     const velUnit = (app.querySelector('#lv-vel-unit') as HTMLSelectElement)
       .value as VelUnit
-    const lenUnit = (app.querySelector('#lv-len-unit') as HTMLSelectElement)
+    const lenUnit = (app.querySelector(`#${lenUnitId}`) as HTMLSelectElement)
       .value as LenUnit
     const contactUnit = (
       app.querySelector('#lv-contact-unit') as HTMLSelectElement
@@ -794,7 +827,8 @@ function renderDosage(
     const bblsPerDay = toBbls(num(bblsEl), volUnit)
 
     let fps: number
-    if (solveFor === 'vel') {
+    // Shared pipeline diameter is owned by the Pipeline section; only solve velocity here.
+    if (solveFor === 'vel' || showMilsFilm) {
       fps = liquidVelocityFps(bblsPerDay, toInches(num(diaEl), diaUnit))
       setNum(velEl, fromFps(fps, velUnit))
     } else {
@@ -815,20 +849,24 @@ function renderDosage(
 
   const computeGas = (solveFor: string) => {
     const rateEl = app.querySelector<HTMLInputElement>('#gv-rate')!
-    const diaEl = app.querySelector<HTMLInputElement>('#gv-dia')!
+    const diaId = showMilsFilm ? 'mf-dia' : 'gv-dia'
+    const diaUnitId = showMilsFilm ? 'mf-dia-unit' : 'gv-dia-unit'
+    const lenId = showMilsFilm ? 'mf-len' : 'gv-len'
+    const lenUnitId = showMilsFilm ? 'mf-len-unit' : 'gv-len-unit'
+    const diaEl = app.querySelector<HTMLInputElement>(`#${diaId}`)!
     const psigEl = app.querySelector<HTMLInputElement>('#gv-psig')!
     const tempFEl = app.querySelector<HTMLInputElement>('#gv-tempF')!
     const zEl = app.querySelector<HTMLInputElement>('#gv-z')!
     const velEl = app.querySelector<HTMLInputElement>('#gv-vel')!
-    const lenEl = app.querySelector<HTMLInputElement>('#gv-len')!
+    const lenEl = app.querySelector<HTMLInputElement>(`#${lenId}`)!
     const contactEl = app.querySelector<HTMLInputElement>('#gv-contact')!
     const rateUnit = (app.querySelector('#gv-rate-unit') as HTMLSelectElement)
       .value as GasRateUnit
-    const diaUnit = (app.querySelector('#gv-dia-unit') as HTMLSelectElement)
+    const diaUnit = (app.querySelector(`#${diaUnitId}`) as HTMLSelectElement)
       .value as DiaUnit
     const velUnit = (app.querySelector('#gv-vel-unit') as HTMLSelectElement)
       .value as VelUnit
-    const lenUnit = (app.querySelector('#gv-len-unit') as HTMLSelectElement)
+    const lenUnit = (app.querySelector(`#${lenUnitId}`) as HTMLSelectElement)
       .value as LenUnit
     const contactUnit = (
       app.querySelector('#gv-contact-unit') as HTMLSelectElement
@@ -837,7 +875,10 @@ function renderDosage(
     const z = num(zEl)
 
     let fps: number
-    if (solveFor === 'vel') {
+    // Shared pipeline diameter is owned by the Pipeline section; do not solve dia here.
+    const gasSolveFor =
+      showMilsFilm && solveFor === 'dia' ? 'vel' : solveFor
+    if (gasSolveFor === 'vel') {
       fps = gasVelocityFps(
         toMcfd(num(rateEl), rateUnit),
         toInches(num(diaEl), diaUnit),
@@ -846,7 +887,7 @@ function renderDosage(
         z,
       )
       setNum(velEl, fromFps(fps, velUnit))
-    } else if (solveFor === 'rate') {
+    } else if (gasSolveFor === 'rate') {
       fps = toFps(num(velEl), velUnit)
       const mcfd = gasRateMcfdFromVelocity(
         fps,
@@ -856,7 +897,7 @@ function renderDosage(
         z,
       )
       setNum(rateEl, fromMcfd(mcfd, rateUnit))
-    } else if (solveFor === 'dia') {
+    } else if (gasSolveFor === 'dia') {
       fps = toFps(num(velEl), velUnit)
       const diaIn = gasDiameterIn(
         toMcfd(num(rateEl), rateUnit),
