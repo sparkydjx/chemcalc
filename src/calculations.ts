@@ -61,33 +61,41 @@ export function dosageBblsPerDay(galsPerDay: number, targetPpm: number): number 
 }
 
 /**
- * Pipeline mils film factor: diameter (in) × length (miles) × 0.862 = mils
- * (thousandths of an inch of film).
+ * Pipeline mils dosage: length (miles) × diameter (in) × target mils = gallons chemical.
  */
-export const MILS_FILM_FACTOR = 0.862
-
-/** Pipeline diameter (in) × length (miles) × 0.862 → mils film. */
-export function milsFilm(
-  diameterIn: number,
+export function milsDosageGallons(
   lengthMiles: number,
+  diameterIn: number,
+  targetMils: number,
 ): number {
-  return diameterIn * lengthMiles * MILS_FILM_FACTOR
+  return lengthMiles * diameterIn * targetMils
 }
 
-/** Solve mils film for pipeline diameter (in). */
-export function milsFilmDiameterIn(
-  mils: number,
+/** Solve mils dosage for target mils thickness. */
+export function milsDosageTargetMils(
+  gallons: number,
   lengthMiles: number,
-): number {
-  return mils / (lengthMiles * MILS_FILM_FACTOR)
-}
-
-/** Solve mils film for pipeline length (miles). */
-export function milsFilmLengthMiles(
-  mils: number,
   diameterIn: number,
 ): number {
-  return mils / (diameterIn * MILS_FILM_FACTOR)
+  return gallons / (lengthMiles * diameterIn)
+}
+
+/** Solve mils dosage for pipeline diameter (in). */
+export function milsDosageDiameterIn(
+  gallons: number,
+  lengthMiles: number,
+  targetMils: number,
+): number {
+  return gallons / (lengthMiles * targetMils)
+}
+
+/** Solve mils dosage for pipeline length (miles). */
+export function milsDosageLengthMiles(
+  gallons: number,
+  diameterIn: number,
+  targetMils: number,
+): number {
+  return gallons / (diameterIn * targetMils)
 }
 
 /** US gal per ft³ used by the displacement (and related) formulas. */
