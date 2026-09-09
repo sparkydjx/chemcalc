@@ -440,21 +440,29 @@ function renderDosage(
   opts: { milsFilm?: boolean } = {},
 ): void {
   const showMilsFilm = opts.milsFilm === true
-  app.innerHTML = shell(
-    title,
-    `
-      <form class="calc-form" id="form">
-        <div id="dosage-fields">
-          ${field('PPM', {
-            id: 'ppm',
-            value: 240,
-            min: '0',
-            unit: 'PPM',
-            solveKey: 'ppm',
-          })}
-          ${
-            showMilsFilm
-              ? `
+  const injectionRateField = field('Injection rate', {
+    id: 'rate',
+    value: '',
+    min: '0',
+    unitOptions: [
+      { value: 'Gals/Day', label: 'Gals/Day' },
+      { value: 'Gals/Hr', label: 'Gals/Hr' },
+      { value: 'Gals/Min', label: 'Gals/Min' },
+      { value: 'Bbls/Day', label: 'Bbls/Day' },
+      { value: 'L/Day', label: 'L/Day' },
+      { value: 'L/Hr', label: 'L/Hr' },
+      { value: 'L/Min', label: 'L/Min' },
+      { value: 'mL/Min', label: 'mL/Min' },
+      { value: 'Qrts/Day', label: 'Qrts/Day' },
+      { value: 'Qrts/Hr', label: 'Qrts/Hr' },
+      { value: 'Qrts/Min', label: 'Qrts/Min' },
+    ],
+    unitId: 'rate-unit',
+    unitValue: 'Gals/Day',
+    solveKey: 'rate',
+    solved: true,
+  })
+  const holdupFieldHtml = `
           <div class="field" data-field="holdup" id="holdup-field">
             <div class="field-header">
               <span class="field-label-row">
@@ -486,51 +494,34 @@ function renderDosage(
               />
               <span class="unit-static">%</span>
             </span>
-          </div>
-          `
-              : field('Volume', {
-                  id: 'bbls',
-                  value: 100,
-                  min: '0',
-                  unitOptions: [
-                    { value: 'Bbls', label: 'Bbls/Day' },
-                    { value: 'm3', label: 'm³/Day' },
-                  ],
-                  unitId: 'vol-unit',
-                  unitValue: 'Bbls',
-                  solveKey: 'bbls',
-                  help: 'Treated fluid volume rate. When Liquid Velocity is included, this is also the flow rate used for velocity and contact time.',
-                })
-          }
-          ${field('Injection rate', {
-            id: 'rate',
-            value: '',
-            min: '0',
-            unitOptions: [
-              { value: 'Gals/Day', label: 'Gals/Day' },
-              { value: 'Gals/Hr', label: 'Gals/Hr' },
-              { value: 'Gals/Min', label: 'Gals/Min' },
-              { value: 'Bbls/Day', label: 'Bbls/Day' },
-              { value: 'L/Day', label: 'L/Day' },
-              { value: 'L/Hr', label: 'L/Hr' },
-              { value: 'L/Min', label: 'L/Min' },
-              { value: 'mL/Min', label: 'mL/Min' },
-              { value: 'Qrts/Day', label: 'Qrts/Day' },
-              { value: 'Qrts/Hr', label: 'Qrts/Hr' },
-              { value: 'Qrts/Min', label: 'Qrts/Min' },
-            ],
-            unitId: 'rate-unit',
-            unitValue: 'Gals/Day',
-            solveKey: 'rate',
-            solved: true,
-          })}
-        </div>
-
+          </div>`
+  app.innerHTML = shell(
+    title,
+    `
+      <form class="calc-form" id="form">
         ${
           showMilsFilm
             ? `
+        <div class="field" data-field="dosage-mode">
+          <div class="field-header">
+            <span class="field-label-row">
+              <span class="field-label">Calculation</span>
+              ${helpLink(
+                'Calculation',
+                'Choose PPM dosage (with optional percent liquid hold-up) or film thickness dosage (target mils, treatment frequency, and gallons chemical).',
+              )}
+            </span>
+          </div>
+          <span class="field-controls">
+            <select id="dosage-mode" class="mode-select" aria-label="Calculation type">
+              <option value="ppm" selected>PPM</option>
+              <option value="film">Film Thickness (mil)</option>
+            </select>
+          </span>
+        </div>
+
         ${sectionTitle('Pipeline')}
-        <div id="mils-film-fields">
+        <div id="pipeline-shared-fields">
           ${field('Diameter', {
             id: 'mf-dia',
             value: 12,
@@ -542,7 +533,7 @@ function renderDosage(
             unitId: 'mf-dia-unit',
             unitValue: 'in',
             solveKey: 'dia',
-            help: 'Inside diameter of the pipeline. Used for line volume (PPM dosage), mils dosage, and liquid or gas velocity when included. Formula uses inches.',
+            help: 'Inside diameter of the pipeline. Used for line volume (PPM), mils dosage (Film Thickness), and liquid or gas velocity when included. Formula uses inches.',
           })}
           ${field('Line length', {
             id: 'mf-len',
@@ -557,50 +548,95 @@ function renderDosage(
             unitId: 'mf-len-unit',
             unitValue: 'miles',
             solveKey: 'len',
-            help: 'Pipeline length. Used for line volume (PPM dosage), mils dosage, and contact time when velocity is included. Mils formula uses miles: length (miles) × diameter (in) × target mils = gallons.',
+            help: 'Pipeline length. Used for line volume (PPM), mils dosage (Film Thickness), and contact time when velocity is included. Mils formula uses miles: length (miles) × diameter (in) × target mils = gallons.',
+          })}
+        </div>
+
+        <div id="ppm-mode-panel" class="mode-panel">
+          ${sectionTitle('PPM')}
+          <div id="dosage-fields">
+            ${field('PPM', {
+              id: 'ppm',
+              value: 240,
+              min: '0',
+              unit: 'PPM',
+              solveKey: 'ppm',
+            })}
+            ${holdupFieldHtml}
+            ${field('Volume', {
+              id: 'bbls',
+              value: '',
+              min: '0',
+              unitOptions: [
+                { value: 'Bbls', label: 'Bbls' },
+                { value: 'Gals', label: 'Gals' },
+                { value: 'L', label: 'L' },
+                { value: 'm3', label: 'm³' },
+              ],
+              unitId: 'vol-unit',
+              unitValue: 'Bbls',
+              solved: true,
+              help: 'Line fill volume from Diameter and Line length: (ID/24)² × length (ft) × 7.4805 / 42 × π. When Percent liquid hold-up is used, this is multiplied by that percent.',
+            })}
+            ${injectionRateField}
+          </div>
+        </div>
+
+        <div id="film-mode-panel" class="mode-panel" hidden>
+          ${sectionTitle('Film Thickness')}
+          <div id="mils-film-fields">
+            ${field('Target mils', {
+              id: 'mf-mils',
+              value: 1,
+              min: '0',
+              unit: 'mils',
+              solveKey: 'mils',
+              help: 'Target film thickness in thousandths of an inch.',
+            })}
+            ${field('Treatment frequency', {
+              id: 'mf-freq',
+              value: 30,
+              min: '0',
+              unit: 'days',
+              help: 'How often the pipeline is treated, in days.',
+            })}
+            ${field('Gallons chemical', {
+              id: 'mf-gals',
+              value: '',
+              min: '0',
+              unit: 'gals',
+              solveKey: 'gals',
+              solved: true,
+              help: 'Chemical volume: length (miles) × diameter (in) × target mils.',
+            })}
+          </div>
+        </div>
+        `
+            : `
+        <div id="dosage-fields">
+          ${field('PPM', {
+            id: 'ppm',
+            value: 240,
+            min: '0',
+            unit: 'PPM',
+            solveKey: 'ppm',
           })}
           ${field('Volume', {
             id: 'bbls',
-            value: '',
+            value: 100,
             min: '0',
             unitOptions: [
-              { value: 'Bbls', label: 'Bbls' },
-              { value: 'Gals', label: 'Gals' },
-              { value: 'L', label: 'L' },
-              { value: 'm3', label: 'm³' },
+              { value: 'Bbls', label: 'Bbls/Day' },
+              { value: 'm3', label: 'm³/Day' },
             ],
             unitId: 'vol-unit',
             unitValue: 'Bbls',
             solveKey: 'bbls',
-            help: 'Line fill volume from Diameter and Line length: (ID/24)² × length (ft) × 7.4805 / 42 × π. When Percent liquid hold-up is used, this is multiplied by that percent.',
+            help: 'Treated fluid volume rate. When Liquid Velocity is included, this is also the flow rate used for velocity and contact time.',
           })}
-          ${field('Target mils', {
-            id: 'mf-mils',
-            value: 1,
-            min: '0',
-            unit: 'mils',
-            solveKey: 'mils',
-            help: 'Target film thickness in thousandths of an inch.',
-          })}
-          ${field('Treatment frequency', {
-            id: 'mf-freq',
-            value: 30,
-            min: '0',
-            unit: 'days',
-            help: 'How often the pipeline is treated, in days.',
-          })}
-          ${field('Gallons chemical', {
-            id: 'mf-gals',
-            value: '',
-            min: '0',
-            unit: 'gals',
-            solveKey: 'gals',
-            solved: true,
-            help: 'Chemical volume: length (miles) × diameter (in) × target mils.',
-          })}
+          ${injectionRateField}
         </div>
         `
-            : ''
         }
 
         ${sectionTitle('Velocity')}
@@ -814,10 +850,25 @@ function renderDosage(
   const milsFilmRoot = showMilsFilm
     ? app.querySelector('#mils-film-fields')
     : null
+  const pipelineSharedRoot = showMilsFilm
+    ? app.querySelector('#pipeline-shared-fields')
+    : null
+  const ppmModePanel = showMilsFilm
+    ? app.querySelector<HTMLElement>('#ppm-mode-panel')
+    : null
+  const filmModePanel = showMilsFilm
+    ? app.querySelector<HTMLElement>('#film-mode-panel')
+    : null
+  const dosageModeEl = showMilsFilm
+    ? app.querySelector<HTMLSelectElement>('#dosage-mode')
+    : null
   const liquidPanel = app.querySelector<HTMLElement>('#liquid-velocity-panel')!
   const gasPanel = app.querySelector<HTMLElement>('#gas-velocity-panel')!
   const includeLiquid = app.querySelector<HTMLInputElement>('#include-liquid')!
   const includeGas = app.querySelector<HTMLInputElement>('#include-gas')!
+
+  const getDosageMode = (): 'ppm' | 'film' =>
+    dosageModeEl?.value === 'film' ? 'film' : 'ppm'
 
   const computePipelineVolume = () => {
     const bblsEl = app.querySelector<HTMLInputElement>('#bbls')!
@@ -1034,10 +1085,16 @@ function renderDosage(
   let gasSolve = 'vel'
 
   const runAll = () => {
-    // Mils may solve for diameter/length; keep line fill volume in sync for PPM.
-    if (showMilsFilm) computeMilsFilm(milsFilmSolve)
-    if (showMilsFilm) computePipelineVolume()
-    computeDosage(dosageSolve)
+    if (showMilsFilm) {
+      if (getDosageMode() === 'film') {
+        computeMilsFilm(milsFilmSolve)
+      } else {
+        computePipelineVolume()
+        computeDosage(dosageSolve)
+      }
+    } else {
+      computeDosage(dosageSolve)
+    }
     if (!liquidPanel.hidden) computeLiquid(liquidSolve)
     if (!gasPanel.hidden) computeGas(gasSolve)
   }
@@ -1099,24 +1156,18 @@ function renderDosage(
     applySolveUi()
   }
 
-  if (showMilsFilm && milsFilmRoot) {
-    // Volume sits under Line length in the Pipeline section but still belongs
-    // to the dosage solve group (PPM / Volume / Injection rate).
+  if (showMilsFilm && milsFilmRoot && pipelineSharedRoot) {
+    wireScopedSolve(dosageRoot, 'rate', (k) => {
+      dosageSolve = k
+    })
+    // Diameter / length live in the shared Pipeline section and participate in
+    // the mils solve group only while Film Thickness mode is active.
     wireScopedSolve(
-      [dosageRoot, milsFilmRoot],
-      'rate',
-      (k) => {
-        dosageSolve = k
-      },
-      { include: ['ppm', 'bbls', 'rate'] },
-    )
-    wireScopedSolve(
-      milsFilmRoot,
+      [pipelineSharedRoot, milsFilmRoot],
       'gals',
       (k) => {
         milsFilmSolve = k
       },
-      { exclude: ['bbls'] },
     )
   } else {
     wireScopedSolve(dosageRoot, 'rate', (k) => {
@@ -1193,7 +1244,13 @@ function renderDosage(
     }
   }
 
-  if (showMilsFilm) {
+  if (
+    showMilsFilm &&
+    dosageModeEl &&
+    ppmModePanel &&
+    filmModePanel &&
+    pipelineSharedRoot
+  ) {
     const includeHoldup = app.querySelector<HTMLInputElement>('#include-holdup')!
     const holdupField = app.querySelector<HTMLElement>('#holdup-field')!
     const holdupPct = app.querySelector<HTMLInputElement>('#holdup-pct')!
@@ -1206,7 +1263,45 @@ function renderDosage(
       runAll()
     }
     includeHoldup.addEventListener('change', syncHoldup)
+
+    const applySharedSolveUi = (film: boolean) => {
+      pipelineSharedRoot
+        .querySelectorAll<HTMLElement>('.field[data-field]')
+        .forEach((wrap) => {
+          const toggle = wrap.querySelector<HTMLElement>('.solve-toggle')
+          const check = wrap.querySelector<HTMLInputElement>('.solve-check')
+          const input = wrap.querySelector<HTMLInputElement>('input.num-input')
+          if (toggle) toggle.hidden = !film
+          if (!film) {
+            wrap.classList.remove('is-solved')
+            if (input) {
+              input.readOnly = false
+              input.removeAttribute('tabindex')
+            }
+            if (check) check.checked = false
+            return
+          }
+          const isSolved = wrap.dataset.field === milsFilmSolve
+          wrap.classList.toggle('is-solved', isSolved)
+          if (input) {
+            input.readOnly = isSolved
+            if (isSolved) input.tabIndex = -1
+            else input.removeAttribute('tabindex')
+          }
+          if (check) check.checked = isSolved
+        })
+    }
+
+    const syncDosageMode = () => {
+      const film = getDosageMode() === 'film'
+      ppmModePanel.hidden = film
+      filmModePanel.hidden = !film
+      applySharedSolveUi(film)
+      runAll()
+    }
+    dosageModeEl.addEventListener('change', syncDosageMode)
     syncHoldup()
+    syncDosageMode()
   } else {
     runAll()
   }
