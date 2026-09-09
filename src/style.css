@@ -335,6 +335,15 @@ input[type='text'][readonly]:not(.num-input) {
   background: var(--accent-soft);
 }
 
+.field#holdup-field:not(.is-holdup-active) {
+  opacity: 0.72;
+}
+
+.field#holdup-field:not(.is-holdup-active) .num-input:disabled {
+  color: var(--muted);
+  cursor: default;
+}
+
 .form-section-title {
   margin: 0.55rem 0 0;
   padding: 0.35rem 0 0;

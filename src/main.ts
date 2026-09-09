@@ -103,7 +103,7 @@ const CALCS: { id: Exclude<CalcId, 'home'>; title: string; blurb: string }[] = [
     id: 'pipeline-dosage',
     title: 'Pipeline Dosage Calculation',
     blurb:
-      'PPM and injection rate from line volume (diameter × length), plus mils dosage — optionally with velocity',
+      'PPM and injection rate from line volume (diameter × length), optional liquid hold-up, plus mils dosage — optionally with velocity',
   },
   {
     id: 'displacement',
@@ -454,6 +454,44 @@ function renderDosage(
           })}
           ${
             showMilsFilm
+              ? `
+          <div class="field" data-field="holdup" id="holdup-field">
+            <div class="field-header">
+              <span class="field-label-row">
+                <span class="field-label">Percent liquid hold-up</span>
+                ${helpLink(
+                  'Percent liquid hold-up',
+                  'When Use is selected, line volume for PPM dosage is multiplied by this percent (volume × percent ÷ 100). Deselect to use full line volume.',
+                )}
+              </span>
+              <label class="solve-toggle" title="Apply percent liquid hold-up">
+                <input
+                  type="checkbox"
+                  id="include-holdup"
+                  aria-label="Use percent liquid hold-up"
+                />
+                <span>Use</span>
+              </label>
+            </div>
+            <span class="field-controls">
+              <input
+                id="holdup-pct"
+                class="num-input"
+                type="text"
+                inputmode="decimal"
+                value="${displayValue(100)}"
+                autocomplete="off"
+                spellcheck="false"
+                disabled
+              />
+              <span class="unit-static">%</span>
+            </span>
+          </div>
+          `
+              : ''
+          }
+          ${
+            showMilsFilm
               ? field('Volume', {
                   id: 'bbls',
                   value: '',
@@ -467,7 +505,7 @@ function renderDosage(
                   unitId: 'vol-unit',
                   unitValue: 'Bbls',
                   solveKey: 'bbls',
-                  help: 'Line fill volume from Diameter and Line length: (ID/24)² × length (ft) × 7.4805 / 42 × π. Check Solve to find volume from geometry.',
+                  help: 'Line fill volume from Diameter and Line length: (ID/24)² × length (ft) × 7.4805 / 42 × π. When Percent liquid hold-up is used, this is multiplied by that percent.',
                 })
               : field('Volume', {
                   id: 'bbls',
@@ -788,10 +826,15 @@ function renderDosage(
       .value as DiaUnit
     const lenUnit = (app.querySelector('#mf-len-unit') as HTMLSelectElement)
       .value as LenUnit
-    const bbls = displacementBbls(
+    let bbls = displacementBbls(
       toInches(num(diaEl), diaUnit),
       toFeet(num(lenEl), lenUnit),
     )
+    const includeHoldup = app.querySelector<HTMLInputElement>('#include-holdup')
+    const holdupEl = app.querySelector<HTMLInputElement>('#holdup-pct')
+    if (includeHoldup?.checked && holdupEl) {
+      bbls *= num(holdupEl) / 100
+    }
     setNum(bblsEl, fromBbls(bbls, volUnit))
   }
 
@@ -1068,6 +1111,7 @@ function renderDosage(
 
   const inputIds = [
     'ppm',
+    'holdup-pct',
     'bbls',
     'rate',
     'vol-unit',
@@ -1112,7 +1156,23 @@ function renderDosage(
     }
   }
 
-  runAll()
+  if (showMilsFilm) {
+    const includeHoldup = app.querySelector<HTMLInputElement>('#include-holdup')!
+    const holdupField = app.querySelector<HTMLElement>('#holdup-field')!
+    const holdupPct = app.querySelector<HTMLInputElement>('#holdup-pct')!
+    const syncHoldup = () => {
+      const on = includeHoldup.checked
+      holdupField.classList.toggle('is-holdup-active', on)
+      holdupPct.disabled = !on
+      if (on) holdupPct.removeAttribute('tabindex')
+      else holdupPct.tabIndex = -1
+      runAll()
+    }
+    includeHoldup.addEventListener('change', syncHoldup)
+    syncHoldup()
+  } else {
+    runAll()
+  }
 }
 
 function renderDisplacement(): void {
