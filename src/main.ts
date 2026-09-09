@@ -582,6 +582,13 @@ function renderDosage(
             solveKey: 'mils',
             help: 'Target film thickness in thousandths of an inch.',
           })}
+          ${field('Treatment frequency', {
+            id: 'mf-freq',
+            value: 30,
+            min: '0',
+            unit: 'days',
+            help: 'How often the pipeline is treated, in days.',
+          })}
           ${field('Gallons chemical', {
             id: 'mf-gals',
             value: '',
@@ -1148,6 +1155,7 @@ function renderDosage(
     'mf-dia',
     'mf-len',
     'mf-mils',
+    'mf-freq',
     'mf-gals',
     'mf-dia-unit',
     'mf-len-unit',
