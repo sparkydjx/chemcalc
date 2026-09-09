@@ -461,12 +461,13 @@ function renderDosage(
                   unitOptions: [
                     { value: 'Bbls', label: 'Bbls' },
                     { value: 'Gals', label: 'Gals' },
+                    { value: 'L', label: 'L' },
                     { value: 'm3', label: 'm³' },
                   ],
                   unitId: 'vol-unit',
                   unitValue: 'Bbls',
-                  solved: true,
-                  help: 'Line fill volume from Diameter and Line length in the Pipeline section: (ID/24)² × length (ft) × 7.4805 / 42 × π. Used for PPM dosage.',
+                  solveKey: 'bbls',
+                  help: 'Line fill volume from Diameter and Line length: (ID/24)² × length (ft) × 7.4805 / 42 × π. Check Solve to find volume from geometry.',
                 })
               : field('Volume', {
                   id: 'bbls',
@@ -804,15 +805,14 @@ function renderDosage(
       .value as RateUnit
     const bblsPerDay = toBbls(num(bblsEl), volUnit)
 
-    // Pipeline dosage: volume is always from diameter × length (never solved here).
-    const dosageSolveFor =
-      showMilsFilm && solveFor === 'bbls' ? 'rate' : solveFor
-
-    if (dosageSolveFor === 'rate') {
+    if (solveFor === 'rate') {
       setNum(rateEl, dosageRate(num(ppmEl), bblsPerDay, rateUnit))
-    } else if (dosageSolveFor === 'ppm') {
+    } else if (solveFor === 'ppm') {
       const gpd = rateToGalsPerDay(num(rateEl), rateUnit)
       setNum(ppmEl, dosagePpm(gpd, bblsPerDay))
+    } else if (showMilsFilm) {
+      // Pipeline: solving for volume uses diameter × length (already applied).
+      return
     } else {
       const gpd = rateToGalsPerDay(num(rateEl), rateUnit)
       setNum(bblsEl, fromBbls(dosageBblsPerDay(gpd, num(ppmEl)), volUnit))
@@ -988,7 +988,7 @@ function renderDosage(
   let gasSolve = 'vel'
 
   const runAll = () => {
-    // Mils may solve for diameter/length; derive line volume before PPM dosage.
+    // Mils may solve for diameter/length; keep line fill volume in sync for PPM.
     if (showMilsFilm) computeMilsFilm(milsFilmSolve)
     if (showMilsFilm) computePipelineVolume()
     computeDosage(dosageSolve)
