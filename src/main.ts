@@ -488,25 +488,6 @@ function renderDosage(
             </span>
           </div>
           `
-              : ''
-          }
-          ${
-            showMilsFilm
-              ? field('Volume', {
-                  id: 'bbls',
-                  value: '',
-                  min: '0',
-                  unitOptions: [
-                    { value: 'Bbls', label: 'Bbls' },
-                    { value: 'Gals', label: 'Gals' },
-                    { value: 'L', label: 'L' },
-                    { value: 'm3', label: 'm³' },
-                  ],
-                  unitId: 'vol-unit',
-                  unitValue: 'Bbls',
-                  solveKey: 'bbls',
-                  help: 'Line fill volume from Diameter and Line length: (ID/24)² × length (ft) × 7.4805 / 42 × π. When Percent liquid hold-up is used, this is multiplied by that percent.',
-                })
               : field('Volume', {
                   id: 'bbls',
                   value: 100,
@@ -578,6 +559,21 @@ function renderDosage(
             solveKey: 'len',
             help: 'Pipeline length. Used for line volume (PPM dosage), mils dosage, and contact time when velocity is included. Mils formula uses miles: length (miles) × diameter (in) × target mils = gallons.',
           })}
+          ${field('Volume', {
+            id: 'bbls',
+            value: '',
+            min: '0',
+            unitOptions: [
+              { value: 'Bbls', label: 'Bbls' },
+              { value: 'Gals', label: 'Gals' },
+              { value: 'L', label: 'L' },
+              { value: 'm3', label: 'm³' },
+            ],
+            unitId: 'vol-unit',
+            unitValue: 'Bbls',
+            solveKey: 'bbls',
+            help: 'Line fill volume from Diameter and Line length: (ID/24)² × length (ft) × 7.4805 / 42 × π. When Percent liquid hold-up is used, this is multiplied by that percent.',
+          })}
           ${field('Target mils', {
             id: 'mf-mils',
             value: 1,
@@ -622,7 +618,7 @@ function renderDosage(
           ${sectionTitle('Liquid Velocity')}
           <p class="embed-note">${
             showMilsFilm
-              ? 'Uses its own Flow rate below, and Diameter / Line length from the Pipeline section. (Volume above is line fill for PPM, not a daily rate.)'
+              ? 'Uses its own Flow rate below, and Diameter / Line length from the Pipeline section. (Pipeline Volume is line fill for PPM, not a daily rate.)'
               : 'Uses Volume above as liquid flow rate.'
           }</p>
           ${
@@ -1040,15 +1036,31 @@ function renderDosage(
   }
 
   const wireScopedSolve = (
-    root: ParentNode,
+    roots: ParentNode | ParentNode[],
     defaultSolve: string,
     setSolve: (key: string) => void,
+    opts?: { include?: string[]; exclude?: string[] },
   ) => {
     let solveFor = defaultSolve
+    const rootList = Array.isArray(roots) ? roots : [roots]
+    const fieldWraps = (): HTMLElement[] => {
+      const wraps: HTMLElement[] = []
+      for (const root of rootList) {
+        root.querySelectorAll<HTMLElement>('.field[data-field]').forEach((wrap) => {
+          const key = wrap.dataset.field!
+          if (opts?.exclude?.includes(key)) return
+          if (opts?.include && !opts.include.includes(key)) return
+          if (!wrap.querySelector('.solve-check')) return
+          wraps.push(wrap)
+        })
+      }
+      return wraps
+    }
+
     const applySolveUi = () => {
-      root.querySelectorAll<HTMLElement>('.field[data-field]').forEach((wrap) => {
+      for (const wrap of fieldWraps()) {
         const check = wrap.querySelector<HTMLInputElement>('.solve-check')
-        if (!check) return
+        if (!check) continue
         const key = wrap.dataset.field!
         const isSolved = key === solveFor
         wrap.classList.toggle('is-solved', isSolved)
@@ -1059,11 +1071,12 @@ function renderDosage(
           else input.removeAttribute('tabindex')
         }
         check.checked = isSolved
-      })
+      }
       setSolve(solveFor)
     }
 
-    root.querySelectorAll<HTMLInputElement>('.solve-check').forEach((check) => {
+    for (const wrap of fieldWraps()) {
+      const check = wrap.querySelector<HTMLInputElement>('.solve-check')!
       check.addEventListener('change', () => {
         if (check.checked) {
           solveFor = check.dataset.solve!
@@ -1074,17 +1087,33 @@ function renderDosage(
         applySolveUi()
         runAll()
       })
-    })
+    }
 
     applySolveUi()
   }
 
-  wireScopedSolve(dosageRoot, 'rate', (k) => {
-    dosageSolve = k
-  })
-  if (milsFilmRoot) {
-    wireScopedSolve(milsFilmRoot, 'gals', (k) => {
-      milsFilmSolve = k
+  if (showMilsFilm && milsFilmRoot) {
+    // Volume sits under Line length in the Pipeline section but still belongs
+    // to the dosage solve group (PPM / Volume / Injection rate).
+    wireScopedSolve(
+      [dosageRoot, milsFilmRoot],
+      'rate',
+      (k) => {
+        dosageSolve = k
+      },
+      { include: ['ppm', 'bbls', 'rate'] },
+    )
+    wireScopedSolve(
+      milsFilmRoot,
+      'gals',
+      (k) => {
+        milsFilmSolve = k
+      },
+      { exclude: ['bbls'] },
+    )
+  } else {
+    wireScopedSolve(dosageRoot, 'rate', (k) => {
+      dosageSolve = k
     })
   }
   wireScopedSolve(liquidPanel, 'vel', (k) => {
