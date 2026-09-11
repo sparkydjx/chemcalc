@@ -586,21 +586,23 @@ function renderDosage(
         <div id="film-mode-panel" class="mode-panel" hidden>
           ${sectionTitle('Film Thickness')}
           <div id="mils-film-fields">
-            ${field('Target mils', {
-              id: 'mf-mils',
-              value: 1,
-              min: '0',
-              unit: 'mils',
-              solveKey: 'mils',
-              help: 'Target film thickness in thousandths of an inch.',
-            })}
-            ${field('Treatment frequency', {
-              id: 'mf-freq',
-              value: 30,
-              min: '0',
-              unit: 'days',
-              help: 'How often the pipeline is treated, in days.',
-            })}
+            <div id="film-mils-freq-fields">
+              ${field('Target mils', {
+                id: 'mf-mils',
+                value: 1,
+                min: '0',
+                unit: 'mils',
+                solveKey: 'mils',
+                help: 'Target film thickness in thousandths of an inch.',
+              })}
+              ${field('Treatment frequency', {
+                id: 'mf-freq',
+                value: 30,
+                min: '0',
+                unit: 'days',
+                help: 'How often the pipeline is treated, in days.',
+              })}
+            </div>
             ${field('Gallons chemical', {
               id: 'mf-gals',
               value: '',
@@ -856,6 +858,9 @@ function renderDosage(
     : null
   const pipelineSharedBlock = showMilsFilm
     ? app.querySelector<HTMLElement>('#pipeline-shared-block')
+    : null
+  const filmMilsFreqRoot = showMilsFilm
+    ? app.querySelector<HTMLElement>('#film-mils-freq-fields')
     : null
   const ppmModePanel = showMilsFilm
     ? app.querySelector<HTMLElement>('#ppm-mode-panel')
@@ -1113,12 +1118,15 @@ function renderDosage(
     const rootList = Array.isArray(roots) ? roots : [roots]
     const fieldWraps = (): HTMLElement[] => {
       const wraps: HTMLElement[] = []
+      const seen = new Set<HTMLElement>()
       for (const root of rootList) {
         root.querySelectorAll<HTMLElement>('.field[data-field]').forEach((wrap) => {
+          if (seen.has(wrap)) return
           const key = wrap.dataset.field!
           if (opts?.exclude?.includes(key)) return
           if (opts?.include && !opts.include.includes(key)) return
           if (!wrap.querySelector('.solve-check')) return
+          seen.add(wrap)
           wraps.push(wrap)
         })
       }
@@ -1173,8 +1181,13 @@ function renderDosage(
     )
     // Diameter / length live in the shared Pipeline section and participate in
     // the mils solve group only while Film Thickness mode is active.
+    // filmMilsFreqRoot moves between Pipeline heading and Diameter in film mode.
     wireScopedSolve(
-      [pipelineSharedRoot, milsFilmRoot],
+      [
+        pipelineSharedRoot,
+        milsFilmRoot,
+        ...(filmMilsFreqRoot ? [filmMilsFreqRoot] : []),
+      ],
       'gals',
       (k) => {
         milsFilmSolve = k
@@ -1262,7 +1275,8 @@ function renderDosage(
     filmModePanel &&
     pipelineSharedRoot &&
     pipelineSharedBlock &&
-    milsFilmRoot
+    milsFilmRoot &&
+    filmMilsFreqRoot
   ) {
     const includeHoldup = app.querySelector<HTMLInputElement>('#include-holdup')!
     const holdupField = app.querySelector<HTMLElement>('#holdup-field')!
@@ -1307,14 +1321,20 @@ function renderDosage(
 
     const placePipelineShared = (film: boolean) => {
       if (film) {
-        // Keep Pipeline visible in Film mode, above mils inputs.
+        // Film order: Pipeline heading → Target mils / Frequency → Diameter / Length
         filmModePanel.insertBefore(pipelineSharedBlock, milsFilmRoot)
+        pipelineSharedBlock.insertBefore(filmMilsFreqRoot, pipelineSharedRoot)
       } else {
         const volumeField = dosageRoot.querySelector<HTMLElement>(
           '[data-field="bbls"]',
         )
         if (volumeField) dosageRoot.insertBefore(pipelineSharedBlock, volumeField)
         else dosageRoot.appendChild(pipelineSharedBlock)
+        const galsField = milsFilmRoot.querySelector<HTMLElement>(
+          '[data-field="gals"]',
+        )
+        if (galsField) milsFilmRoot.insertBefore(filmMilsFreqRoot, galsField)
+        else milsFilmRoot.prepend(filmMilsFreqRoot)
       }
     }
 
