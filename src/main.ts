@@ -531,6 +531,39 @@ function renderDosage(
               solveKey: 'ppm',
             })}
             ${holdupFieldHtml}
+            <div id="pipeline-shared-block">
+              ${sectionTitle('Pipeline')}
+              <div id="pipeline-shared-fields">
+                ${field('Diameter', {
+                  id: 'mf-dia',
+                  value: 12,
+                  min: '0',
+                  unitOptions: [
+                    { value: 'in', label: 'in' },
+                    { value: 'mm', label: 'mm' },
+                  ],
+                  unitId: 'mf-dia-unit',
+                  unitValue: 'in',
+                  solveKey: 'dia',
+                  help: 'Inside diameter of the pipeline. Used for line volume (PPM), mils dosage (Film Thickness), and liquid or gas velocity when included. Formula uses inches.',
+                })}
+                ${field('Line length', {
+                  id: 'mf-len',
+                  value: 1,
+                  min: '0',
+                  unitOptions: [
+                    { value: 'miles', label: 'miles' },
+                    { value: 'km', label: 'km' },
+                    { value: 'ft', label: 'ft' },
+                    { value: 'm', label: 'm' },
+                  ],
+                  unitId: 'mf-len-unit',
+                  unitValue: 'miles',
+                  solveKey: 'len',
+                  help: 'Pipeline length. Used for line volume (PPM), mils dosage (Film Thickness), and contact time when velocity is included. Mils formula uses miles: length (miles) × diameter (in) × target mils = gallons.',
+                })}
+              </div>
+            </div>
             ${field('Volume', {
               id: 'bbls',
               value: '',
@@ -578,38 +611,6 @@ function renderDosage(
               help: 'Chemical volume: length (miles) × diameter (in) × target mils.',
             })}
           </div>
-        </div>
-
-        ${sectionTitle('Pipeline')}
-        <div id="pipeline-shared-fields">
-          ${field('Diameter', {
-            id: 'mf-dia',
-            value: 12,
-            min: '0',
-            unitOptions: [
-              { value: 'in', label: 'in' },
-              { value: 'mm', label: 'mm' },
-            ],
-            unitId: 'mf-dia-unit',
-            unitValue: 'in',
-            solveKey: 'dia',
-            help: 'Inside diameter of the pipeline. Used for line volume (PPM), mils dosage (Film Thickness), and liquid or gas velocity when included. Formula uses inches.',
-          })}
-          ${field('Line length', {
-            id: 'mf-len',
-            value: 1,
-            min: '0',
-            unitOptions: [
-              { value: 'miles', label: 'miles' },
-              { value: 'km', label: 'km' },
-              { value: 'ft', label: 'ft' },
-              { value: 'm', label: 'm' },
-            ],
-            unitId: 'mf-len-unit',
-            unitValue: 'miles',
-            solveKey: 'len',
-            help: 'Pipeline length. Used for line volume (PPM), mils dosage (Film Thickness), and contact time when velocity is included. Mils formula uses miles: length (miles) × diameter (in) × target mils = gallons.',
-          })}
         </div>
         `
             : `
@@ -852,6 +853,9 @@ function renderDosage(
     : null
   const pipelineSharedRoot = showMilsFilm
     ? app.querySelector('#pipeline-shared-fields')
+    : null
+  const pipelineSharedBlock = showMilsFilm
+    ? app.querySelector<HTMLElement>('#pipeline-shared-block')
     : null
   const ppmModePanel = showMilsFilm
     ? app.querySelector<HTMLElement>('#ppm-mode-panel')
@@ -1157,9 +1161,16 @@ function renderDosage(
   }
 
   if (showMilsFilm && milsFilmRoot && pipelineSharedRoot) {
-    wireScopedSolve(dosageRoot, 'rate', (k) => {
-      dosageSolve = k
-    })
+    // Diameter / length sit inside #dosage-fields for PPM layout but belong to
+    // the Film Thickness solve group, not the PPM/rate group.
+    wireScopedSolve(
+      dosageRoot,
+      'rate',
+      (k) => {
+        dosageSolve = k
+      },
+      { exclude: ['dia', 'len'] },
+    )
     // Diameter / length live in the shared Pipeline section and participate in
     // the mils solve group only while Film Thickness mode is active.
     wireScopedSolve(
@@ -1249,7 +1260,9 @@ function renderDosage(
     dosageModeEl &&
     ppmModePanel &&
     filmModePanel &&
-    pipelineSharedRoot
+    pipelineSharedRoot &&
+    pipelineSharedBlock &&
+    milsFilmRoot
   ) {
     const includeHoldup = app.querySelector<HTMLInputElement>('#include-holdup')!
     const holdupField = app.querySelector<HTMLElement>('#holdup-field')!
@@ -1292,10 +1305,24 @@ function renderDosage(
         })
     }
 
+    const placePipelineShared = (film: boolean) => {
+      if (film) {
+        // Keep Pipeline visible in Film mode, above mils inputs.
+        filmModePanel.insertBefore(pipelineSharedBlock, milsFilmRoot)
+      } else {
+        const volumeField = dosageRoot.querySelector<HTMLElement>(
+          '[data-field="bbls"]',
+        )
+        if (volumeField) dosageRoot.insertBefore(pipelineSharedBlock, volumeField)
+        else dosageRoot.appendChild(pipelineSharedBlock)
+      }
+    }
+
     const syncDosageMode = () => {
       const film = getDosageMode() === 'film'
       ppmModePanel.hidden = film
       filmModePanel.hidden = !film
+      placePipelineShared(film)
       applySharedSolveUi(film)
       runAll()
     }
