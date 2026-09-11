@@ -520,38 +520,6 @@ function renderDosage(
           </span>
         </div>
 
-        ${sectionTitle('Pipeline')}
-        <div id="pipeline-shared-fields">
-          ${field('Diameter', {
-            id: 'mf-dia',
-            value: 12,
-            min: '0',
-            unitOptions: [
-              { value: 'in', label: 'in' },
-              { value: 'mm', label: 'mm' },
-            ],
-            unitId: 'mf-dia-unit',
-            unitValue: 'in',
-            solveKey: 'dia',
-            help: 'Inside diameter of the pipeline. Used for line volume (PPM), mils dosage (Film Thickness), and liquid or gas velocity when included. Formula uses inches.',
-          })}
-          ${field('Line length', {
-            id: 'mf-len',
-            value: 1,
-            min: '0',
-            unitOptions: [
-              { value: 'miles', label: 'miles' },
-              { value: 'km', label: 'km' },
-              { value: 'ft', label: 'ft' },
-              { value: 'm', label: 'm' },
-            ],
-            unitId: 'mf-len-unit',
-            unitValue: 'miles',
-            solveKey: 'len',
-            help: 'Pipeline length. Used for line volume (PPM), mils dosage (Film Thickness), and contact time when velocity is included. Mils formula uses miles: length (miles) × diameter (in) × target mils = gallons.',
-          })}
-        </div>
-
         <div id="ppm-mode-panel" class="mode-panel">
           ${sectionTitle('PPM')}
           <div id="dosage-fields">
@@ -610,6 +578,38 @@ function renderDosage(
               help: 'Chemical volume: length (miles) × diameter (in) × target mils.',
             })}
           </div>
+        </div>
+
+        ${sectionTitle('Pipeline')}
+        <div id="pipeline-shared-fields">
+          ${field('Diameter', {
+            id: 'mf-dia',
+            value: 12,
+            min: '0',
+            unitOptions: [
+              { value: 'in', label: 'in' },
+              { value: 'mm', label: 'mm' },
+            ],
+            unitId: 'mf-dia-unit',
+            unitValue: 'in',
+            solveKey: 'dia',
+            help: 'Inside diameter of the pipeline. Used for line volume (PPM), mils dosage (Film Thickness), and liquid or gas velocity when included. Formula uses inches.',
+          })}
+          ${field('Line length', {
+            id: 'mf-len',
+            value: 1,
+            min: '0',
+            unitOptions: [
+              { value: 'miles', label: 'miles' },
+              { value: 'km', label: 'km' },
+              { value: 'ft', label: 'ft' },
+              { value: 'm', label: 'm' },
+            ],
+            unitId: 'mf-len-unit',
+            unitValue: 'miles',
+            solveKey: 'len',
+            help: 'Pipeline length. Used for line volume (PPM), mils dosage (Film Thickness), and contact time when velocity is included. Mils formula uses miles: length (miles) × diameter (in) × target mils = gallons.',
+          })}
         </div>
         `
             : `
