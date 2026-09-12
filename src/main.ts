@@ -440,7 +440,7 @@ function renderDosage(
   opts: { milsFilm?: boolean } = {},
 ): void {
   const showMilsFilm = opts.milsFilm === true
-  // Shared with PPM and Film Thickness injection rate fields.
+  // Shared with PPM and Film Thickness Continuous injection rate fields.
   const injectionRateUnits: UnitOption[] = [
     { value: 'Gals/Day', label: 'Gals/Day' },
     { value: 'Gals/Hr', label: 'Gals/Hr' },
@@ -453,6 +453,14 @@ function renderDosage(
     { value: 'Qrts/Day', label: 'Qrts/Day' },
     { value: 'Qrts/Hr', label: 'Qrts/Hr' },
     { value: 'Qrts/Min', label: 'Qrts/Min' },
+  ]
+  // Film Thickness Batch uses total chemical volume (not a rate).
+  const filmBatchVolumeUnits: UnitOption[] = [
+    { value: 'Bbls', label: 'Bbls' },
+    { value: 'm3', label: 'm³' },
+    { value: 'Gals', label: 'Gals' },
+    { value: 'Qrts', label: 'Qrts' },
+    { value: 'L', label: 'L' },
   ]
   const injectionRateField = field('Injection rate', {
     id: 'rate',
@@ -650,7 +658,7 @@ function renderDosage(
               unitValue: 'Gals/Day',
               solveKey: 'gals',
               solved: true,
-              help: 'Continuous: chemical volume (miles × in × mils) divided by treatment duration. Batch: total chemical volume as a rate.',
+              help: 'Continuous: chemical volume (miles × in × mils) divided by treatment duration. Batch: total chemical volume (miles × in × mils).',
             })}
           </div>
         </div>
@@ -971,51 +979,55 @@ function renderDosage(
     const milsEl = app.querySelector<HTMLInputElement>('#mf-mils')!
     const galsEl = app.querySelector<HTMLInputElement>('#mf-gals')!
     const freqEl = app.querySelector<HTMLInputElement>('#mf-freq')
+    const unitEl = app.querySelector('#mf-gals-unit') as HTMLSelectElement
     const diaUnit = (app.querySelector('#mf-dia-unit') as HTMLSelectElement)
       .value as DiaUnit
     const lenUnit = (app.querySelector('#mf-len-unit') as HTMLSelectElement)
       .value as LenUnit
-    const rateUnit = (app.querySelector('#mf-gals-unit') as HTMLSelectElement)
-      .value as RateUnit
-    // Continuous: injection rate = total gallons / treatment duration (days).
-    // Batch: duration is hidden, so treat duration as 1 day (total gallons).
-    const continuous = app.querySelector<HTMLInputElement>(
+    const continuous = !!app.querySelector<HTMLInputElement>(
       '#film-treat-continuous',
     )?.checked
+    // Continuous: injection rate = total gallons / treatment duration (days).
+    // Batch: total chemical volume in volume units (Bbls, m³, Gals, Qrts, L).
     const durationDays =
       continuous && freqEl && num(freqEl) > 0 ? num(freqEl) : 1
-    const totalGallonsFromRate = () =>
-      rateToGalsPerDay(num(galsEl), rateUnit) * durationDays
+    const totalGallons = (): number => {
+      if (continuous) {
+        return (
+          rateToGalsPerDay(num(galsEl), unitEl.value as RateUnit) * durationDays
+        )
+      }
+      return toBbls(num(galsEl), unitEl.value as VolUnit) * 42
+    }
 
     if (solveFor === 'gals') {
       const diaIn = toInches(num(diaEl), diaUnit)
       const miles = toFeet(num(lenEl), lenUnit) / 5280
       const gallons = milsDosageGallons(miles, diaIn, num(milsEl))
-      const gpd = gallons / durationDays
-      setNum(galsEl, galsPerDayToRate(gpd, rateUnit))
+      if (continuous) {
+        setNum(
+          galsEl,
+          galsPerDayToRate(gallons / durationDays, unitEl.value as RateUnit),
+        )
+      } else {
+        setNum(galsEl, fromBbls(gallons / 42, unitEl.value as VolUnit))
+      }
     } else if (solveFor === 'mils') {
       const diaIn = toInches(num(diaEl), diaUnit)
       const miles = toFeet(num(lenEl), lenUnit) / 5280
-      setNum(
-        milsEl,
-        milsDosageTargetMils(totalGallonsFromRate(), miles, diaIn),
-      )
+      setNum(milsEl, milsDosageTargetMils(totalGallons(), miles, diaIn))
     } else if (solveFor === 'dia') {
       const miles = toFeet(num(lenEl), lenUnit) / 5280
       setNum(
         diaEl,
         fromInches(
-          milsDosageDiameterIn(totalGallonsFromRate(), miles, num(milsEl)),
+          milsDosageDiameterIn(totalGallons(), miles, num(milsEl)),
           diaUnit,
         ),
       )
     } else {
       const diaIn = toInches(num(diaEl), diaUnit)
-      const miles = milsDosageLengthMiles(
-        totalGallonsFromRate(),
-        diaIn,
-        num(milsEl),
-      )
+      const miles = milsDosageLengthMiles(totalGallons(), diaIn, num(milsEl))
       setNum(lenEl, fromFeet(miles * 5280, lenUnit))
     }
   }
@@ -1403,12 +1415,57 @@ function renderDosage(
     const freqField = app.querySelector<HTMLElement>('#mf-freq')?.closest(
       '.field',
     ) as HTMLElement | null
+    const galsField = app.querySelector<HTMLElement>('#mf-gals')?.closest(
+      '.field',
+    ) as HTMLElement | null
+    const galsUnitEl = app.querySelector<HTMLSelectElement>('#mf-gals-unit')
+    const setSelectOptions = (
+      select: HTMLSelectElement,
+      options: UnitOption[],
+      preferred: string,
+    ) => {
+      const sorted = sortUnitOptions(options)
+      const keep =
+        sorted.find((o) => o.value === select.value)?.value ??
+        sorted.find((o) => o.value === preferred)?.value ??
+        sorted[0]?.value
+      select.innerHTML = sorted
+        .map(
+          (o) =>
+            `<option value="${o.value}"${o.value === keep ? ' selected' : ''}>${o.label}</option>`,
+        )
+        .join('')
+    }
     const syncFilmTreatMode = () => {
-      const batch = app.querySelector<HTMLInputElement>(
+      const batch = !!app.querySelector<HTMLInputElement>(
         '#film-treat-batch',
       )?.checked
       // Treatment duration applies to Continuous, not Batch.
-      if (freqField) freqField.hidden = !!batch
+      if (freqField) freqField.hidden = batch
+      if (galsField && galsUnitEl) {
+        const labelEl = galsField.querySelector('.field-label')
+        const helpBody = galsField.querySelector('.field-help-body')
+        const helpSummary = galsField.querySelector('.field-help summary')
+        if (batch) {
+          if (labelEl) labelEl.textContent = 'Volume'
+          if (helpSummary)
+            helpSummary.setAttribute('aria-label', 'Explain Volume')
+          if (helpBody) {
+            helpBody.textContent =
+              'Total chemical volume: length (miles) × diameter (in) × target thickness (mils).'
+          }
+          setSelectOptions(galsUnitEl, filmBatchVolumeUnits, 'Gals')
+        } else {
+          if (labelEl) labelEl.textContent = 'Injection rate'
+          if (helpSummary)
+            helpSummary.setAttribute('aria-label', 'Explain Injection rate')
+          if (helpBody) {
+            helpBody.textContent =
+              'Chemical volume (miles × in × mils) divided by treatment duration.'
+          }
+          setSelectOptions(galsUnitEl, injectionRateUnits, 'Gals/Day')
+        }
+      }
       runAll()
     }
     app
@@ -2283,6 +2340,7 @@ function renderTankVolume(): void {
   const volUnitLabel = (unit: VolUnit): string => {
     if (unit === 'm3') return 'm³'
     if (unit === 'Gals') return 'Gal'
+    if (unit === 'Qrts') return 'Qrts'
     return unit
   }
 
