@@ -623,7 +623,7 @@ function renderDosage(
           </div>
           <div id="mils-film-fields">
             <div id="film-mils-freq-fields">
-              ${field('Target thickness', {
+              ${field('Target Thickness', {
                 id: 'mf-mils',
                 value: 1,
                 min: '0',
@@ -1376,7 +1376,7 @@ function renderDosage(
 
     const placePipelineShared = (film: boolean) => {
       if (film) {
-        // Film order: Pipeline heading → Target mils / Duration → Diameter / Length
+        // Film order: Pipeline heading → Target Thickness / Duration → Diameter / Length
         filmModePanel.insertBefore(pipelineSharedBlock, milsFilmRoot)
         pipelineSharedBlock.insertBefore(filmMilsFreqRoot, pipelineSharedRoot)
       } else {
