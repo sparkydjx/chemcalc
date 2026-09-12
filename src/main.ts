@@ -591,7 +591,7 @@ function renderDosage(
                 <span class="field-label">Treatment</span>
                 ${helpLink(
                   'Treatment',
-                  'Continuous applies an ongoing film dosage (uses treatment frequency). Batch applies a one-time film treatment without a frequency interval.',
+                  'Continuous applies an ongoing film dosage (uses treatment duration). Batch applies a one-time film treatment without a duration interval.',
                 )}
               </span>
             </div>
@@ -631,12 +631,12 @@ function renderDosage(
                 solveKey: 'mils',
                 help: 'Target film thickness in thousandths of an inch.',
               })}
-              ${field('Treatment frequency', {
+              ${field('Treatment duration', {
                 id: 'mf-freq',
                 value: 30,
                 min: '0',
                 unit: 'days',
-                help: 'How often the pipeline is treated, in days. Used for Continuous treatment.',
+                help: 'How long the continuous film treatment lasts, in days.',
               })}
             </div>
             ${field('Gallons chemical', {
@@ -1357,7 +1357,7 @@ function renderDosage(
 
     const placePipelineShared = (film: boolean) => {
       if (film) {
-        // Film order: Pipeline heading → Target mils / Frequency → Diameter / Length
+        // Film order: Pipeline heading → Target mils / Duration → Diameter / Length
         filmModePanel.insertBefore(pipelineSharedBlock, milsFilmRoot)
         pipelineSharedBlock.insertBefore(filmMilsFreqRoot, pipelineSharedRoot)
       } else {
@@ -1381,7 +1381,7 @@ function renderDosage(
       const batch = app.querySelector<HTMLInputElement>(
         '#film-treat-batch',
       )?.checked
-      // Treatment frequency applies to Continuous, not Batch.
+      // Treatment duration applies to Continuous, not Batch.
       if (freqField) freqField.hidden = !!batch
       runAll()
     }
