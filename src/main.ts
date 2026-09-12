@@ -440,23 +440,25 @@ function renderDosage(
   opts: { milsFilm?: boolean } = {},
 ): void {
   const showMilsFilm = opts.milsFilm === true
+  // Shared with PPM and Film Thickness injection rate fields.
+  const injectionRateUnits: UnitOption[] = [
+    { value: 'Gals/Day', label: 'Gals/Day' },
+    { value: 'Gals/Hr', label: 'Gals/Hr' },
+    { value: 'Gals/Min', label: 'Gals/Min' },
+    { value: 'Bbls/Day', label: 'Bbls/Day' },
+    { value: 'L/Day', label: 'L/Day' },
+    { value: 'L/Hr', label: 'L/Hr' },
+    { value: 'L/Min', label: 'L/Min' },
+    { value: 'mL/Min', label: 'mL/Min' },
+    { value: 'Qrts/Day', label: 'Qrts/Day' },
+    { value: 'Qrts/Hr', label: 'Qrts/Hr' },
+    { value: 'Qrts/Min', label: 'Qrts/Min' },
+  ]
   const injectionRateField = field('Injection rate', {
     id: 'rate',
     value: '',
     min: '0',
-    unitOptions: [
-      { value: 'Gals/Day', label: 'Gals/Day' },
-      { value: 'Gals/Hr', label: 'Gals/Hr' },
-      { value: 'Gals/Min', label: 'Gals/Min' },
-      { value: 'Bbls/Day', label: 'Bbls/Day' },
-      { value: 'L/Day', label: 'L/Day' },
-      { value: 'L/Hr', label: 'L/Hr' },
-      { value: 'L/Min', label: 'L/Min' },
-      { value: 'mL/Min', label: 'mL/Min' },
-      { value: 'Qrts/Day', label: 'Qrts/Day' },
-      { value: 'Qrts/Hr', label: 'Qrts/Hr' },
-      { value: 'Qrts/Min', label: 'Qrts/Min' },
-    ],
+    unitOptions: injectionRateUnits,
     unitId: 'rate-unit',
     unitValue: 'Gals/Day',
     solveKey: 'rate',
@@ -623,13 +625,13 @@ function renderDosage(
           </div>
           <div id="mils-film-fields">
             <div id="film-mils-freq-fields">
-              ${field('Target mils', {
+              ${field('Target Thickness', {
                 id: 'mf-mils',
                 value: 1,
                 min: '0',
                 unit: 'mils',
                 solveKey: 'mils',
-                help: 'Target film thickness in thousandths of an inch.',
+                help: 'Target film thickness in thousandths of an inch (mils).',
               })}
               ${field('Treatment duration', {
                 id: 'mf-freq',
@@ -639,14 +641,16 @@ function renderDosage(
                 help: 'How long the continuous film treatment lasts, in days.',
               })}
             </div>
-            ${field('Gallons chemical', {
+            ${field('Injection rate', {
               id: 'mf-gals',
               value: '',
               min: '0',
-              unit: 'gals',
+              unitOptions: injectionRateUnits,
+              unitId: 'mf-gals-unit',
+              unitValue: 'Gals/Day',
               solveKey: 'gals',
               solved: true,
-              help: 'Chemical volume: length (miles) × diameter (in) × target mils.',
+              help: 'Chemical injection rate from length (miles) × diameter (in) × target thickness (mils), as gallons per day (convertible).',
             })}
           </div>
         </div>
@@ -970,27 +974,31 @@ function renderDosage(
       .value as DiaUnit
     const lenUnit = (app.querySelector('#mf-len-unit') as HTMLSelectElement)
       .value as LenUnit
+    const rateUnit = (app.querySelector('#mf-gals-unit') as HTMLSelectElement)
+      .value as RateUnit
+    const rateAsGallons = () => rateToGalsPerDay(num(galsEl), rateUnit)
 
     if (solveFor === 'gals') {
       const diaIn = toInches(num(diaEl), diaUnit)
       const miles = toFeet(num(lenEl), lenUnit) / 5280
-      setNum(galsEl, milsDosageGallons(miles, diaIn, num(milsEl)))
+      const gallons = milsDosageGallons(miles, diaIn, num(milsEl))
+      setNum(galsEl, galsPerDayToRate(gallons, rateUnit))
     } else if (solveFor === 'mils') {
       const diaIn = toInches(num(diaEl), diaUnit)
       const miles = toFeet(num(lenEl), lenUnit) / 5280
-      setNum(milsEl, milsDosageTargetMils(num(galsEl), miles, diaIn))
+      setNum(milsEl, milsDosageTargetMils(rateAsGallons(), miles, diaIn))
     } else if (solveFor === 'dia') {
       const miles = toFeet(num(lenEl), lenUnit) / 5280
       setNum(
         diaEl,
         fromInches(
-          milsDosageDiameterIn(num(galsEl), miles, num(milsEl)),
+          milsDosageDiameterIn(rateAsGallons(), miles, num(milsEl)),
           diaUnit,
         ),
       )
     } else {
       const diaIn = toInches(num(diaEl), diaUnit)
-      const miles = milsDosageLengthMiles(num(galsEl), diaIn, num(milsEl))
+      const miles = milsDosageLengthMiles(rateAsGallons(), diaIn, num(milsEl))
       setNum(lenEl, fromFeet(miles * 5280, lenUnit))
     }
   }
@@ -1268,6 +1276,7 @@ function renderDosage(
     'mf-mils',
     'mf-freq',
     'mf-gals',
+    'mf-gals-unit',
     'mf-dia-unit',
     'mf-len-unit',
     'lv-rate',
@@ -1357,7 +1366,7 @@ function renderDosage(
 
     const placePipelineShared = (film: boolean) => {
       if (film) {
-        // Film order: Pipeline heading → Target mils / Duration → Diameter / Length
+        // Film order: Pipeline heading → Target Thickness / Duration → Diameter / Length
         filmModePanel.insertBefore(pipelineSharedBlock, milsFilmRoot)
         pipelineSharedBlock.insertBefore(filmMilsFreqRoot, pipelineSharedRoot)
       } else {
