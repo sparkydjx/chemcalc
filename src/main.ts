@@ -508,7 +508,7 @@ function renderDosage(
               <span class="field-label">Calculation</span>
               ${helpLink(
                 'Calculation',
-                'Choose PPM dosage (with optional percent liquid hold-up) or film thickness dosage (target mils, treatment frequency, and gallons chemical).',
+                'Choose PPM dosage (with optional percent liquid hold-up) or film thickness dosage (batch or continuous treatment, target mils, and gallons chemical).',
               )}
             </span>
           </div>
@@ -585,6 +585,42 @@ function renderDosage(
 
         <div id="film-mode-panel" class="mode-panel" hidden>
           ${sectionTitle('Film Thickness')}
+          <div class="field" data-field="film-treat-mode">
+            <div class="field-header">
+              <span class="field-label-row">
+                <span class="field-label">Treatment</span>
+                ${helpLink(
+                  'Treatment',
+                  'Batch applies a periodic film treatment (uses treatment frequency). Continuous applies an ongoing film dosage without a batch interval.',
+                )}
+              </span>
+            </div>
+            <div
+              class="segmented-toggle"
+              role="radiogroup"
+              aria-label="Film treatment type"
+            >
+              <label class="segmented-option">
+                <input
+                  type="radio"
+                  name="film-treat-mode"
+                  id="film-treat-batch"
+                  value="batch"
+                  checked
+                />
+                <span>Batch</span>
+              </label>
+              <label class="segmented-option">
+                <input
+                  type="radio"
+                  name="film-treat-mode"
+                  id="film-treat-continuous"
+                  value="continuous"
+                />
+                <span>Continuous</span>
+              </label>
+            </div>
+          </div>
           <div id="mils-film-fields">
             <div id="film-mils-freq-fields">
               ${field('Target mils', {
@@ -600,7 +636,7 @@ function renderDosage(
                 value: 30,
                 min: '0',
                 unit: 'days',
-                help: 'How often the pipeline is treated, in days.',
+                help: 'How often the pipeline is treated, in days. Used for Batch treatment.',
               })}
             </div>
             ${field('Gallons chemical', {
@@ -1338,13 +1374,28 @@ function renderDosage(
       }
     }
 
+    const freqField = app.querySelector<HTMLElement>('#mf-freq')?.closest(
+      '.field',
+    ) as HTMLElement | null
+    const syncFilmTreatMode = () => {
+      const continuous = app.querySelector<HTMLInputElement>(
+        '#film-treat-continuous',
+      )?.checked
+      if (freqField) freqField.hidden = !!continuous
+      runAll()
+    }
+    app
+      .querySelectorAll<HTMLInputElement>('input[name="film-treat-mode"]')
+      .forEach((el) => el.addEventListener('change', syncFilmTreatMode))
+
     const syncDosageMode = () => {
       const film = getDosageMode() === 'film'
       ppmModePanel.hidden = film
       filmModePanel.hidden = !film
       placePipelineShared(film)
       applySharedSolveUi(film)
-      runAll()
+      if (film) syncFilmTreatMode()
+      else runAll()
     }
     dosageModeEl.addEventListener('change', syncDosageMode)
     syncHoldup()
