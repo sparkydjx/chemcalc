@@ -107,7 +107,7 @@ const CALCS: { id: Exclude<CalcId, 'home'>; title: string; blurb: string }[] = [
   },
   {
     id: 'displacement',
-    title: 'Line Displacement Volume',
+    title: 'Volume Displacement',
     blurb: 'Diameter, length, end caps, and volume — solve for any',
   },
   {
@@ -1491,7 +1491,7 @@ function renderDosage(
 
 function renderDisplacement(): void {
   app.innerHTML = shell(
-    'Line Displacement Volume',
+    'Volume Displacement',
     `
       <form class="calc-form" id="form">
         ${field('Diameter', {
