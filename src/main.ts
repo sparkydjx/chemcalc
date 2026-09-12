@@ -591,7 +591,7 @@ function renderDosage(
                 <span class="field-label">Treatment</span>
                 ${helpLink(
                   'Treatment',
-                  'Continuous applies an ongoing film dosage (uses treatment frequency). Batch applies a one-time film treatment without a frequency interval.',
+                  'Batch applies a periodic film treatment (uses treatment frequency). Continuous applies an ongoing film dosage without a batch interval.',
                 )}
               </span>
             </div>
@@ -606,6 +606,7 @@ function renderDosage(
                   name="film-treat-mode"
                   id="film-treat-batch"
                   value="batch"
+                  checked
                 />
                 <span>Batch</span>
               </label>
@@ -615,7 +616,6 @@ function renderDosage(
                   name="film-treat-mode"
                   id="film-treat-continuous"
                   value="continuous"
-                  checked
                 />
                 <span>Continuous</span>
               </label>
@@ -636,7 +636,7 @@ function renderDosage(
                 value: 30,
                 min: '0',
                 unit: 'days',
-                help: 'How often the pipeline is treated, in days. Used for Continuous treatment.',
+                help: 'How often the pipeline is treated, in days. Used for Batch treatment.',
               })}
             </div>
             ${field('Gallons chemical', {
@@ -1378,11 +1378,11 @@ function renderDosage(
       '.field',
     ) as HTMLElement | null
     const syncFilmTreatMode = () => {
-      const batch = app.querySelector<HTMLInputElement>(
-        '#film-treat-batch',
+      const continuous = app.querySelector<HTMLInputElement>(
+        '#film-treat-continuous',
       )?.checked
-      // Treatment frequency applies to Continuous, not Batch.
-      if (freqField) freqField.hidden = !!batch
+      // Treatment frequency applies to Batch, not Continuous.
+      if (freqField) freqField.hidden = !!continuous
       runAll()
     }
     app
