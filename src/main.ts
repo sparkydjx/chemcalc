@@ -591,7 +591,7 @@ function renderDosage(
                 <span class="field-label">Treatment</span>
                 ${helpLink(
                   'Treatment',
-                  'Batch applies a periodic film treatment (uses treatment frequency). Continuous applies an ongoing film dosage without a batch interval.',
+                  'Continuous applies an ongoing film dosage (uses treatment frequency). Batch applies a one-time film treatment without a frequency interval.',
                 )}
               </span>
             </div>
@@ -606,7 +606,6 @@ function renderDosage(
                   name="film-treat-mode"
                   id="film-treat-batch"
                   value="batch"
-                  checked
                 />
                 <span>Batch</span>
               </label>
@@ -616,6 +615,7 @@ function renderDosage(
                   name="film-treat-mode"
                   id="film-treat-continuous"
                   value="continuous"
+                  checked
                 />
                 <span>Continuous</span>
               </label>
@@ -636,7 +636,7 @@ function renderDosage(
                 value: 30,
                 min: '0',
                 unit: 'days',
-                help: 'How often the pipeline is treated, in days. Used for Batch treatment.',
+                help: 'How often the pipeline is treated, in days. Used for Continuous treatment.',
               })}
             </div>
             ${field('Gallons chemical', {
@@ -1378,10 +1378,11 @@ function renderDosage(
       '.field',
     ) as HTMLElement | null
     const syncFilmTreatMode = () => {
-      const continuous = app.querySelector<HTMLInputElement>(
-        '#film-treat-continuous',
+      const batch = app.querySelector<HTMLInputElement>(
+        '#film-treat-batch',
       )?.checked
-      if (freqField) freqField.hidden = !!continuous
+      // Treatment frequency applies to Continuous, not Batch.
+      if (freqField) freqField.hidden = !!batch
       runAll()
     }
     app
