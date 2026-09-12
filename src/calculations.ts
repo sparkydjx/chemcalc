@@ -23,7 +23,7 @@ const ML_PER_GAL = LITERS_PER_GAL * 1000
 const QTS_PER_GAL = 4
 export type DiaUnit = 'in' | 'ft' | 'mm' | 'm'
 export type LenUnit = 'ft' | 'm' | 'miles' | 'km'
-export type VolUnit = 'Bbls' | 'm3' | 'Gals' | 'L'
+export type VolUnit = 'Bbls' | 'm3' | 'Gals' | 'Qrts' | 'L'
 export type VelUnit = 'ft/sec' | 'm/sec'
 /** Residence / contact time along a line. */
 export type TimeUnit = 'sec' | 'min' | 'hrs'
@@ -861,6 +861,7 @@ export function fromSeconds(seconds: number, unit: TimeUnit): number {
 export function toBbls(value: number, unit: VolUnit): number {
   if (unit === 'm3') return value / 0.1589872949
   if (unit === 'Gals') return value / 42
+  if (unit === 'Qrts') return value / (42 * QTS_PER_GAL)
   if (unit === 'L') return value / (42 * LITERS_PER_GAL)
   return value
 }
@@ -868,6 +869,7 @@ export function toBbls(value: number, unit: VolUnit): number {
 export function fromBbls(bbls: number, unit: VolUnit): number {
   if (unit === 'm3') return bbls * 0.1589872949
   if (unit === 'Gals') return bbls * 42
+  if (unit === 'Qrts') return bbls * 42 * QTS_PER_GAL
   if (unit === 'L') return bbls * 42 * LITERS_PER_GAL
   return bbls
 }
