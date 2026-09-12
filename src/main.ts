@@ -650,7 +650,7 @@ function renderDosage(
               unitValue: 'Gals/Day',
               solveKey: 'gals',
               solved: true,
-              help: 'Chemical injection rate from length (miles) × diameter (in) × target thickness (mils), as gallons per day (convertible).',
+              help: 'Continuous: chemical volume (miles × in × mils) divided by treatment duration. Batch: total chemical volume as a rate.',
             })}
           </div>
         </div>
@@ -970,35 +970,52 @@ function renderDosage(
     const lenEl = app.querySelector<HTMLInputElement>('#mf-len')!
     const milsEl = app.querySelector<HTMLInputElement>('#mf-mils')!
     const galsEl = app.querySelector<HTMLInputElement>('#mf-gals')!
+    const freqEl = app.querySelector<HTMLInputElement>('#mf-freq')
     const diaUnit = (app.querySelector('#mf-dia-unit') as HTMLSelectElement)
       .value as DiaUnit
     const lenUnit = (app.querySelector('#mf-len-unit') as HTMLSelectElement)
       .value as LenUnit
     const rateUnit = (app.querySelector('#mf-gals-unit') as HTMLSelectElement)
       .value as RateUnit
-    const rateAsGallons = () => rateToGalsPerDay(num(galsEl), rateUnit)
+    // Continuous: injection rate = total gallons / treatment duration (days).
+    // Batch: duration is hidden, so treat duration as 1 day (total gallons).
+    const continuous = app.querySelector<HTMLInputElement>(
+      '#film-treat-continuous',
+    )?.checked
+    const durationDays =
+      continuous && freqEl && num(freqEl) > 0 ? num(freqEl) : 1
+    const totalGallonsFromRate = () =>
+      rateToGalsPerDay(num(galsEl), rateUnit) * durationDays
 
     if (solveFor === 'gals') {
       const diaIn = toInches(num(diaEl), diaUnit)
       const miles = toFeet(num(lenEl), lenUnit) / 5280
       const gallons = milsDosageGallons(miles, diaIn, num(milsEl))
-      setNum(galsEl, galsPerDayToRate(gallons, rateUnit))
+      const gpd = gallons / durationDays
+      setNum(galsEl, galsPerDayToRate(gpd, rateUnit))
     } else if (solveFor === 'mils') {
       const diaIn = toInches(num(diaEl), diaUnit)
       const miles = toFeet(num(lenEl), lenUnit) / 5280
-      setNum(milsEl, milsDosageTargetMils(rateAsGallons(), miles, diaIn))
+      setNum(
+        milsEl,
+        milsDosageTargetMils(totalGallonsFromRate(), miles, diaIn),
+      )
     } else if (solveFor === 'dia') {
       const miles = toFeet(num(lenEl), lenUnit) / 5280
       setNum(
         diaEl,
         fromInches(
-          milsDosageDiameterIn(rateAsGallons(), miles, num(milsEl)),
+          milsDosageDiameterIn(totalGallonsFromRate(), miles, num(milsEl)),
           diaUnit,
         ),
       )
     } else {
       const diaIn = toInches(num(diaEl), diaUnit)
-      const miles = milsDosageLengthMiles(rateAsGallons(), diaIn, num(milsEl))
+      const miles = milsDosageLengthMiles(
+        totalGallonsFromRate(),
+        diaIn,
+        num(milsEl),
+      )
       setNum(lenEl, fromFeet(miles * 5280, lenUnit))
     }
   }
