@@ -1357,7 +1357,7 @@ function renderDosage(
 
     const placePipelineShared = (film: boolean) => {
       if (film) {
-        // Film order: Pipeline heading → Target mils / Frequency → Diameter / Length
+        // Film order: Pipeline heading → Target mils / Duration → Diameter / Length
         filmModePanel.insertBefore(pipelineSharedBlock, milsFilmRoot)
         pipelineSharedBlock.insertBefore(filmMilsFreqRoot, pipelineSharedRoot)
       } else {
