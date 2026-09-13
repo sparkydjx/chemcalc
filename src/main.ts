@@ -37,6 +37,8 @@ import {
   calculateApiRp14E,
   toInches,
   fromInches,
+  toMils,
+  fromMils,
   toFeet,
   fromFeet,
   toBbls,
@@ -60,6 +62,7 @@ import {
   type RateUnit,
   type DiaUnit,
   type LenUnit,
+  type ThicknessUnit,
   type VolUnit,
   type VelUnit,
   type TimeUnit,
@@ -637,9 +640,14 @@ function renderDosage(
                 id: 'mf-mils',
                 value: 1,
                 min: '0',
-                unit: 'mils',
+                unitOptions: [
+                  { value: 'mils', label: 'mils' },
+                  { value: 'um', label: 'μm' },
+                ],
+                unitId: 'mf-mils-unit',
+                unitValue: 'mils',
                 solveKey: 'mils',
-                help: 'Target film thickness in thousandths of an inch (mils).',
+                help: 'Target film thickness. Formula uses mils (thousandths of an inch); 1 mil = 25.4 μm.',
               })}
               ${field('Treatment duration', {
                 id: 'mf-freq',
@@ -984,6 +992,8 @@ function renderDosage(
       .value as DiaUnit
     const lenUnit = (app.querySelector('#mf-len-unit') as HTMLSelectElement)
       .value as LenUnit
+    const milsUnit = (app.querySelector('#mf-mils-unit') as HTMLSelectElement)
+      .value as ThicknessUnit
     const continuous = !!app.querySelector<HTMLInputElement>(
       '#film-treat-continuous',
     )?.checked
@@ -999,11 +1009,12 @@ function renderDosage(
       }
       return toBbls(num(galsEl), unitEl.value as VolUnit) * 42
     }
+    const targetMils = () => toMils(num(milsEl), milsUnit)
 
     if (solveFor === 'gals') {
       const diaIn = toInches(num(diaEl), diaUnit)
       const miles = toFeet(num(lenEl), lenUnit) / 5280
-      const gallons = milsDosageGallons(miles, diaIn, num(milsEl))
+      const gallons = milsDosageGallons(miles, diaIn, targetMils())
       if (continuous) {
         setNum(
           galsEl,
@@ -1015,19 +1026,22 @@ function renderDosage(
     } else if (solveFor === 'mils') {
       const diaIn = toInches(num(diaEl), diaUnit)
       const miles = toFeet(num(lenEl), lenUnit) / 5280
-      setNum(milsEl, milsDosageTargetMils(totalGallons(), miles, diaIn))
+      setNum(
+        milsEl,
+        fromMils(milsDosageTargetMils(totalGallons(), miles, diaIn), milsUnit),
+      )
     } else if (solveFor === 'dia') {
       const miles = toFeet(num(lenEl), lenUnit) / 5280
       setNum(
         diaEl,
         fromInches(
-          milsDosageDiameterIn(totalGallons(), miles, num(milsEl)),
+          milsDosageDiameterIn(totalGallons(), miles, targetMils()),
           diaUnit,
         ),
       )
     } else {
       const diaIn = toInches(num(diaEl), diaUnit)
-      const miles = milsDosageLengthMiles(totalGallons(), diaIn, num(milsEl))
+      const miles = milsDosageLengthMiles(totalGallons(), diaIn, targetMils())
       setNum(lenEl, fromFeet(miles * 5280, lenUnit))
     }
   }
@@ -1303,6 +1317,7 @@ function renderDosage(
     'mf-dia',
     'mf-len',
     'mf-mils',
+    'mf-mils-unit',
     'mf-freq',
     'mf-gals',
     'mf-gals-unit',
