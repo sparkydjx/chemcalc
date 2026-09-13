@@ -23,6 +23,8 @@ const ML_PER_GAL = LITERS_PER_GAL * 1000
 const QTS_PER_GAL = 4
 export type DiaUnit = 'in' | 'ft' | 'mm' | 'm'
 export type LenUnit = 'ft' | 'm' | 'miles' | 'km'
+/** Film thickness: mils (thousandths of an inch) or micrometers (μm). 1 mil = 25.4 μm. */
+export type ThicknessUnit = 'mils' | 'um'
 export type VolUnit = 'Bbls' | 'm3' | 'Gals' | 'Qrts' | 'L'
 export type VelUnit = 'ft/sec' | 'm/sec'
 /** Residence / contact time along a line. */
@@ -835,6 +837,18 @@ export function fromInches(inches: number, unit: DiaUnit): number {
   if (unit === 'ft') return inches / 12
   if (unit === 'm') return inches * 0.0254
   return inches
+}
+
+/** Convert film thickness UI value → mils (formula base). 1 mil = 25.4 μm. */
+export function toMils(value: number, unit: ThicknessUnit): number {
+  if (unit === 'um') return value / 25.4
+  return value
+}
+
+/** Convert mils (formula base) → selected film thickness display unit. */
+export function fromMils(mils: number, unit: ThicknessUnit): number {
+  if (unit === 'um') return mils * 25.4
+  return mils
 }
 
 export function toFeet(value: number, unit: LenUnit): number {
