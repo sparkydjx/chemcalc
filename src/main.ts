@@ -1541,7 +1541,7 @@ function renderDisplacement(): void {
             </select>
           </span>
         </div>
-        ${field('Line length', {
+        ${field('Length', {
           id: 'len',
           value: 5280,
           min: '0',
