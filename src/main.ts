@@ -2021,69 +2021,154 @@ function renderScavengerEfficiency(): void {
     'Scavenger Efficiency',
     `
       <form class="calc-form" id="form">
-        ${field('H₂S concentration', {
-          id: 'h2s',
-          value: 160,
-          min: '0',
-          unit: 'ppm',
-          solveKey: 'h2s',
-        })}
-        ${field('Gas rate', {
-          id: 'gas',
-          value: 2500,
-          min: '0',
-          unitOptions: [
-            { value: 'MCFD', label: 'MCFD' },
-            { value: 'MMCFD', label: 'MMCFD' },
-            { value: 'M3/Day', label: 'm³/Day' },
-          ],
-          unitId: 'gas-unit',
-          unitValue: 'MCFD',
-          solveKey: 'gas',
-        })}
-        ${field('Scavenger density', {
-          id: 'density',
-          value: 8.5,
-          min: '0',
-          step: '0.01',
-          unit: 'lb/gal',
-        })}
-        ${field('Scavenger activity', {
-          id: 'activity',
-          value: 40,
-          min: '0',
-          unit: '%',
-        })}
-        ${field('Injection rate', {
-          id: 'inject',
-          value: 50,
-          min: '0',
-          unitOptions: [
-            { value: 'Gals/Day', label: 'Gals/Day' },
-            { value: 'Gals/Hr', label: 'Gals/Hr' },
-            { value: 'Gals/Min', label: 'Gals/Min' },
-            { value: 'Qrts/Day', label: 'Qrts/Day' },
-            { value: 'Qrts/Hr', label: 'Qrts/Hr' },
-            { value: 'L/Day', label: 'L/Day' },
-            { value: 'L/Hr', label: 'L/Hr' },
-          ],
-          unitId: 'inject-unit',
-          unitValue: 'Gals/Day',
-          solveKey: 'inject',
-        })}
-        ${field('Scavenger efficiency', {
-          id: 'efficiency',
-          value: '',
-          min: '0',
-          unit: '%',
-          solveKey: 'efficiency',
-          solved: true,
-        })}
+        <div id="scavenger-fields">
+          ${field('H₂S concentration', {
+            id: 'h2s',
+            value: 160,
+            min: '0',
+            unit: 'ppm',
+            solveKey: 'h2s',
+          })}
+          ${field('Gas rate', {
+            id: 'gas',
+            value: 2500,
+            min: '0',
+            unitOptions: [
+              { value: 'MCFD', label: 'MCFD' },
+              { value: 'MMCFD', label: 'MMCFD' },
+              { value: 'M3/Day', label: 'm³/Day' },
+            ],
+            unitId: 'gas-unit',
+            unitValue: 'MCFD',
+            solveKey: 'gas',
+          })}
+          ${field('Scavenger density', {
+            id: 'density',
+            value: 8.5,
+            min: '0',
+            step: '0.01',
+            unit: 'lb/gal',
+          })}
+          ${field('Scavenger activity', {
+            id: 'activity',
+            value: 40,
+            min: '0',
+            unit: '%',
+          })}
+          ${field('Injection rate', {
+            id: 'inject',
+            value: 50,
+            min: '0',
+            unitOptions: [
+              { value: 'Gals/Day', label: 'Gals/Day' },
+              { value: 'Gals/Hr', label: 'Gals/Hr' },
+              { value: 'Gals/Min', label: 'Gals/Min' },
+              { value: 'Qrts/Day', label: 'Qrts/Day' },
+              { value: 'Qrts/Hr', label: 'Qrts/Hr' },
+              { value: 'L/Day', label: 'L/Day' },
+              { value: 'L/Hr', label: 'L/Hr' },
+            ],
+            unitId: 'inject-unit',
+            unitValue: 'Gals/Day',
+            solveKey: 'inject',
+          })}
+          ${field('Scavenger efficiency', {
+            id: 'efficiency',
+            value: '',
+            min: '0',
+            unit: '%',
+            solveKey: 'efficiency',
+            solved: true,
+          })}
+        </div>
+
+        ${sectionTitle('Volume Displacement')}
+        <div class="include-options" role="group" aria-label="Include Volume Displacement calculator">
+          ${includeOption(
+            'include-displacement',
+            'Volume Displacement',
+            'Diameter, length, end caps, and displacement volume — solve for any',
+          )}
+        </div>
+
+        <div id="displacement-panel" class="embedded-calc" hidden>
+          ${sectionTitle('Volume Displacement')}
+          <p class="embed-note">Independent of scavenger efficiency — same calculator as Volume Displacement.</p>
+          ${field('Diameter', {
+            id: 'vd-dia',
+            value: 12,
+            min: '0',
+            unitOptions: [
+              { value: 'in', label: 'in' },
+              { value: 'mm', label: 'mm' },
+            ],
+            unitId: 'vd-dia-unit',
+            unitValue: 'in',
+            solveKey: 'dia',
+            help: 'Inside diameter of the line or vessel. End-cap volumes are computed from this diameter alone.',
+          })}
+          <div class="field" data-field="end-cap">
+            <div class="field-header">
+              <span class="field-label-row">
+                <span class="field-label">End caps</span>
+                ${helpLink(
+                  'End caps',
+                  'Cylinder end caps on both ends. Flat adds no volume. Hemispherical = πD³/12 each, elliptical 2:1 = πD³/24 each, ASME F&D torispherical uses dish radius = D and knuckle = 0.06D. Straight length stays tangent-line to tangent-line.',
+                )}
+              </span>
+            </div>
+            <span class="field-controls">
+              <select id="vd-end-cap" aria-label="End caps">
+                <option value="flat" selected>Flat</option>
+                <option value="hemispherical">Hemispherical</option>
+                <option value="elliptical">Elliptical (2:1)</option>
+                <option value="torispherical">Torispherical (ASME F&amp;D)</option>
+              </select>
+            </span>
+          </div>
+          ${field('Length', {
+            id: 'vd-len',
+            value: 5280,
+            min: '0',
+            unitOptions: [
+              { value: 'ft', label: 'ft' },
+              { value: 'km', label: 'km' },
+              { value: 'miles', label: 'miles' },
+            ],
+            unitId: 'vd-len-unit',
+            unitValue: 'ft',
+            solveKey: 'len',
+            help: 'Straight cylindrical length (tangent line to tangent line). End-cap dish depth is not included here.',
+          })}
+          ${field('Displacement volume', {
+            id: 'vd-vol',
+            value: '',
+            min: '0',
+            unitOptions: [
+              { value: 'Bbls', label: 'Bbls' },
+              { value: 'Gals', label: 'Gals' },
+              { value: 'm3', label: 'm³' },
+            ],
+            unitId: 'vd-vol-unit',
+            unitValue: 'Bbls',
+            solveKey: 'vol',
+            solved: true,
+            help: 'Cylinder volume plus both end caps when a head type is selected.',
+          })}
+        </div>
       </form>
     `,
     true,
   )
   wireBack()
+  wireFieldHelp()
+
+  const scavengerRoot = app.querySelector('#scavenger-fields')!
+  const displacementPanel = app.querySelector<HTMLElement>('#displacement-panel')!
+  const includeDisplacement = app.querySelector<HTMLInputElement>(
+    '#include-displacement',
+  )!
+
   wireSolveForm(
     'efficiency',
     [
@@ -2155,7 +2240,65 @@ function renderScavengerEfficiency(): void {
         clearSolved()
       }
     },
+    scavengerRoot,
   )
+
+  const displacementSolve = wireSolveForm(
+    'vol',
+    [
+      'vd-dia',
+      'vd-len',
+      'vd-vol',
+      'vd-end-cap',
+      'vd-dia-unit',
+      'vd-len-unit',
+      'vd-vol-unit',
+    ],
+    (solveFor) => {
+      const diaEl = app.querySelector<HTMLInputElement>('#vd-dia')!
+      const lenEl = app.querySelector<HTMLInputElement>('#vd-len')!
+      const volEl = app.querySelector<HTMLInputElement>('#vd-vol')!
+      const endCap = (app.querySelector('#vd-end-cap') as HTMLSelectElement)
+        .value as EndCapType
+      const diaUnit = (app.querySelector('#vd-dia-unit') as HTMLSelectElement)
+        .value as DiaUnit
+      const lenUnit = (app.querySelector('#vd-len-unit') as HTMLSelectElement)
+        .value as LenUnit
+      const volUnit = (app.querySelector('#vd-vol-unit') as HTMLSelectElement)
+        .value as VolUnit
+
+      if (solveFor === 'vol') {
+        const bbls = displacementWithEndCapsBbls(
+          toInches(num(diaEl), diaUnit),
+          toFeet(num(lenEl), lenUnit),
+          endCap,
+        )
+        setNum(volEl, fromBbls(bbls, volUnit))
+      } else if (solveFor === 'dia') {
+        const diaIn = displacementDiameterInWithEndCaps(
+          toBbls(num(volEl), volUnit),
+          toFeet(num(lenEl), lenUnit),
+          endCap,
+        )
+        setNum(diaEl, fromInches(diaIn, diaUnit))
+      } else {
+        const lenFt = displacementLengthFtWithEndCaps(
+          toBbls(num(volEl), volUnit),
+          toInches(num(diaEl), diaUnit),
+          endCap,
+        )
+        setNum(lenEl, fromFeet(lenFt, lenUnit))
+      }
+    },
+    displacementPanel,
+  )
+
+  const syncDisplacementPanel = () => {
+    displacementPanel.hidden = !includeDisplacement.checked
+    if (includeDisplacement.checked) displacementSolve.run()
+  }
+  includeDisplacement.addEventListener('change', syncDisplacementPanel)
+  syncDisplacementPanel()
 }
 
 function renderTankVolume(): void {
