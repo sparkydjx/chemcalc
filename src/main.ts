@@ -2284,7 +2284,7 @@ function renderTankVolume(): void {
           unitId: 'height-unit',
           unitValue: 'in',
           solveKey: 'height',
-          help: 'Liquid fill height from the tank bottom. Pressure is taken at the valve: head = liquid height − valve offset (e.g. 20 in − 2 in → 18 in of fluid). For horizontal cylinders, you cannot enter a height greater than diameter − valve offset. For vertical tanks with dished heads, height includes the heads and is capped at shell length + both head depths − valve offset. Check Solve to find height from volume (or from pressure and density when volume is blank).',
+          help: 'Liquid fill height from the tank bottom. Pressure is taken at the valve: head = liquid height − valve offset (e.g. 20 in − 2 in → 18 in of fluid). For horizontal cylinders, you cannot enter a height greater than diameter − valve offset. For vertical tanks with dished heads, height includes the heads and is capped at shell length + both head depths − valve offset. Check Solve to find height from volume (or from pressure and density when volume is blank). When solving for volume, height follows pressure (or drives pressure if you edit height).',
         })}
         ${field('Valve offset', {
           id: 'offset',
@@ -2312,7 +2312,7 @@ function renderTankVolume(): void {
           unitId: 'vol-unit',
           unitValue: 'Gals',
           solveKey: 'vol',
-          help: 'Liquid volume above the valve. Vertical uses the cylindrical shell and both end caps when a head type is selected. Horizontal uses the partial-circle fill formula and adds both end caps when the cylinder cross-section is full. A valve offset subtracts the dead volume below the outlet. Check Solve to find volume from liquid height, or enter volume and solve for liquid height.',
+          help: 'Liquid volume above the valve. Vertical uses the cylindrical shell and both end caps when a head type is selected. Horizontal uses the partial-circle fill formula and adds both end caps when the cylinder cross-section is full. A valve offset subtracts the dead volume below the outlet. Check Solve to find volume from pressure and density (liquid height updates with pressure), or from liquid height. Enter volume and solve for liquid height to work the other way.',
         })}
         ${field('Pressure', {
           id: 'pressure',
@@ -2327,7 +2327,7 @@ function renderTankVolume(): void {
           unitValue: 'psi',
           solveKey: 'pressure',
           solved: true,
-          help: 'Hydrostatic pressure of the fluid above the valve (P = ρ × head / 144). With 20 in of liquid and a 2 in offset, pressure is based on 18 in of fluid, not 20 in.',
+          help: 'Hydrostatic pressure of the fluid above the valve (P = ρ × head / 144). With 20 in of liquid and a 2 in offset, pressure is based on 18 in of fluid, not 20 in. When Solve is checked on Volume, enter pressure to update liquid height and volume.',
         })}
         ${field('Level height above valve', {
           id: 'head',
@@ -2536,6 +2536,31 @@ function renderTankVolume(): void {
   orientationEl.addEventListener('change', applyOrientationUi)
   endCapEl.addEventListener('change', applyOrientationUi)
 
+  // When solving for volume, either pressure or liquid height can drive the
+  // other so volume stays consistent with hydrostatic head.
+  let volumeSolveDriver: 'pressure' | 'height' = 'pressure'
+  const markVolumeDriver = (driver: 'pressure' | 'height') => () => {
+    volumeSolveDriver = driver
+  }
+  for (const id of ['pressure', 'pressure-unit']) {
+    const el = app.querySelector(`#${id}`)
+    el?.addEventListener('input', markVolumeDriver('pressure'))
+    el?.addEventListener('change', markVolumeDriver('pressure'))
+  }
+  for (const id of ['height', 'height-unit']) {
+    const el = app.querySelector(`#${id}`)
+    el?.addEventListener('input', markVolumeDriver('height'))
+    el?.addEventListener('change', markVolumeDriver('height'))
+  }
+  // Prefer pressure → height/volume when the user first checks Solve on Volume.
+  app
+    .querySelector<HTMLInputElement>('.field[data-field="vol"] .solve-check')
+    ?.addEventListener('change', (event) => {
+      if ((event.target as HTMLInputElement).checked) {
+        volumeSolveDriver = 'pressure'
+      }
+    })
+
   wireSolveForm(
     'pressure',
     [
@@ -2652,8 +2677,35 @@ function renderTankVolume(): void {
           setNum(densityEl, fromLbPerFt3(lbFt3, densityUnit))
         }
       } else if (solveFor === 'vol') {
-        // Volume from geometry — liquid height is the input.
-        clampHeightInput()
+        // Volume is solved from geometry. Pressure and liquid height stay
+        // linked: editing pressure updates height (and volume); editing
+        // height updates pressure (and volume).
+        const densityLbFt3 = toLbPerFt3(num(densityEl), densityUnit)
+        if (volumeSolveDriver === 'pressure') {
+          const psi = toPsi(num(pressureEl), pressureUnit)
+          if (
+            Number.isFinite(psi) &&
+            psi >= 0 &&
+            Number.isFinite(densityLbFt3) &&
+            densityLbFt3 > 0
+          ) {
+            const headFromP = liquidHeightFromPressure(psi, densityLbFt3)
+            heightFt = offsetFt + (headFromP > 0 ? headFromP : 0)
+            if (Number.isFinite(maxHeightFt) && heightFt > maxHeightFt) {
+              heightFt = maxHeightFt
+            }
+            setNum(heightEl, fromHeightFeet(heightFt, heightUnit))
+          } else {
+            clampHeightInput()
+          }
+        } else {
+          clampHeightInput()
+          if (Number.isFinite(densityLbFt3) && densityLbFt3 > 0) {
+            const headFt = headAboveValveFt(heightFt, offsetFt)
+            const psi = liquidPressurePsi(densityLbFt3, headFt)
+            setNum(pressureEl, fromPsi(psi, pressureUnit))
+          }
+        }
       } else {
         // Solve for liquid height from entered volume (geometry), with
         // hydrostatic P/ρ as a fallback when volume is not usable.
