@@ -348,15 +348,15 @@ export function cylinderVolumeAboveOffsetBbls(
 export type TankVolumeTableRow = {
   /** Liquid height from the tank bottom, in the requested height unit. */
   height: number
-  /** Gross liquid volume at that height, in the requested volume unit. */
+  /** Liquid volume above the valve at that height, in the requested volume unit. */
   volume: number
 }
 
 /**
  * Build a horizontal-tank volume table: one row per unit of the diameter UOM
  * from empty (0) through full (diameter), with liquid height and volume in the
- * selected display units. Uses gross fill volume from the tank bottom (no
- * valve-offset subtraction).
+ * selected display units. Volume is net above `offsetFt` (dead volume below the
+ * valve is subtracted), matching {@link cylinderVolumeAboveOffsetBbls}.
  */
 export function horizontalTankVolumeTable(
   diameterIn: number,
@@ -365,19 +365,24 @@ export function horizontalTankVolumeTable(
   diaUnit: DiaUnit,
   heightUnit: HeightUnit,
   volUnit: VolUnit,
+  offsetFt = 0,
 ): TankVolumeTableRow[] {
   if (!(diameterIn > 0) || !(lengthFt > 0)) return []
 
   const maxDiaUnits = fromInches(diameterIn, diaUnit)
   if (!(maxDiaUnits > 0) || !Number.isFinite(maxDiaUnits)) return []
 
+  const offset =
+    Number.isFinite(offsetFt) && offsetFt > 0 ? offsetFt : 0
+
   const rows: TankVolumeTableRow[] = []
   const pushHeightIn = (heightIn: number) => {
     const heightFt = heightIn / 12
-    const bbls = tankGrossVolumeBbls(
+    const bbls = cylinderVolumeAboveOffsetBbls(
       'horizontal',
       diameterIn,
       heightFt,
+      offset,
       lengthFt,
       endCap,
     )
