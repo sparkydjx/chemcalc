@@ -2347,7 +2347,7 @@ function renderTankVolume(): void {
             Volume table
           </button>
           <p class="action-hint" id="volume-table-hint">
-            Horizontal tank: volume at each unit of the diameter UOM, with liquid height and volume in the selected units.
+            Horizontal tank: volume above the valve at each unit of the diameter UOM, with liquid height and volume in the selected units. Valve offset subtracts dead volume below the outlet.
           </p>
         </div>
         <div class="volume-table-wrap" id="volume-table-wrap" hidden>
@@ -2396,10 +2396,14 @@ function renderTankVolume(): void {
 
     const diaEl = app.querySelector<HTMLInputElement>('#dia')!
     const lenEl = app.querySelector<HTMLInputElement>('#len')!
+    const offsetEl = app.querySelector<HTMLInputElement>('#offset')!
     const diaUnit = (app.querySelector('#dia-unit') as HTMLSelectElement)
       .value as DiaUnit
     const heightUnit = (
       app.querySelector('#height-unit') as HTMLSelectElement
+    ).value as HeightUnit
+    const offsetUnit = (
+      app.querySelector('#offset-unit') as HTMLSelectElement
     ).value as HeightUnit
     const volUnit = (app.querySelector('#vol-unit') as HTMLSelectElement)
       .value as VolUnit
@@ -2408,6 +2412,11 @@ function renderTankVolume(): void {
     const lengthFt = toHeightFeet(num(lenEl), (
       app.querySelector('#len-unit') as HTMLSelectElement
     ).value as HeightUnit)
+    const offsetRaw = num(offsetEl)
+    const offsetFt =
+      Number.isFinite(offsetRaw) && offsetRaw > 0
+        ? toHeightFeet(offsetRaw, offsetUnit)
+        : 0
 
     const rows = horizontalTankVolumeTable(
       diaIn,
@@ -2416,6 +2425,7 @@ function renderTankVolume(): void {
       diaUnit,
       heightUnit,
       volUnit,
+      offsetFt,
     )
     volumeTableRows = rows
     volumeTableHeightLabel = `Liquid height (${heightUnit})`
@@ -2438,10 +2448,15 @@ function renderTankVolume(): void {
       )
       .join('')
 
+    const offsetNote =
+      offsetFt > 0
+        ? ` · volume above ${formatResult(fromHeightFeet(offsetFt, heightUnit), 4)} ${heightUnit} valve offset`
+        : ''
+
     volumeTableScroll.innerHTML = `
       <table class="volume-table">
         <caption>
-          Per ${diaUnit} of diameter · ${rows.length} levels
+          Per ${diaUnit} of diameter · ${rows.length} levels${offsetNote}
         </caption>
         <thead>
           <tr>
