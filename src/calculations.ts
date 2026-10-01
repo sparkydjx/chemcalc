@@ -344,7 +344,7 @@ export function cylinderVolumeAboveOffsetBbls(
   return net > 0 ? net : 0
 }
 
-/** One row of a horizontal-tank volume (strapping) table. */
+/** One row of a tank volume (strapping) table. */
 export type TankVolumeTableRow = {
   /** Liquid height from the tank bottom, in the requested height unit. */
   height: number
@@ -353,10 +353,126 @@ export type TankVolumeTableRow = {
 }
 
 /**
- * Build a horizontal-tank volume table: one row per unit of the diameter UOM
- * from empty (0) through full (diameter), with liquid height and volume in the
- * selected display units. Volume is net above `offsetFt` (dead volume below the
- * valve is subtracted), matching {@link cylinderVolumeAboveOffsetBbls}.
+ * Full geometric liquid height (ft) from the tank bottom (no valve offset).
+ * Horizontal: diameter. Vertical with heads: shell + both head depths.
+ * Vertical flat has no geometric max — returns Infinity.
+ */
+export function tankFullHeightFt(
+  orientation: CylinderOrientation,
+  diameterIn: number,
+  shellLengthFt: number,
+  endCap: EndCapType,
+): number {
+  if (orientation === 'horizontal') {
+    if (!(diameterIn > 0)) return NaN
+    return diameterIn / 12
+  }
+  if (endCap === 'flat') return Number.POSITIVE_INFINITY
+  const headDepth = endCapDepthFt(diameterIn, endCap)
+  if (!Number.isFinite(headDepth)) return NaN
+  return shellLengthFt + 2 * headDepth
+}
+
+/**
+ * Build a tank volume table for the selected orientation and end caps.
+ *
+ * Horizontal: one row per unit of the diameter UOM from empty through full
+ * (diameter). Vertical: one row per unit of the height UOM from empty through
+ * full tank height (shell + heads, or `verticalFlatMaxHeightFt` for flat
+ * ends). Volume is net above `offsetFt`, matching
+ * {@link cylinderVolumeAboveOffsetBbls}.
+ */
+export function tankVolumeTable(
+  orientation: CylinderOrientation,
+  diameterIn: number,
+  lengthFt: number,
+  endCap: EndCapType,
+  diaUnit: DiaUnit,
+  heightUnit: HeightUnit,
+  volUnit: VolUnit,
+  offsetFt = 0,
+  /** Upper liquid height (ft) for vertical flat tanks (no geometric max). */
+  verticalFlatMaxHeightFt = 0,
+): TankVolumeTableRow[] {
+  if (!(diameterIn > 0)) return []
+
+  const offset =
+    Number.isFinite(offsetFt) && offsetFt > 0 ? offsetFt : 0
+
+  let maxHeightFt: number
+  if (orientation === 'horizontal') {
+    if (!(lengthFt > 0)) return []
+    maxHeightFt = diameterIn / 12
+  } else if (endCap === 'flat') {
+    maxHeightFt = verticalFlatMaxHeightFt
+    if (!(maxHeightFt > 0) || !Number.isFinite(maxHeightFt)) return []
+  } else {
+    maxHeightFt = tankFullHeightFt(
+      orientation,
+      diameterIn,
+      lengthFt,
+      endCap,
+    )
+    if (!(maxHeightFt > 0) || !Number.isFinite(maxHeightFt)) return []
+  }
+
+  const rows: TankVolumeTableRow[] = []
+  const pushHeightFt = (heightFt: number) => {
+    const h = Math.min(Math.max(heightFt, 0), maxHeightFt)
+    const bbls = cylinderVolumeAboveOffsetBbls(
+      orientation,
+      diameterIn,
+      h,
+      offset,
+      lengthFt,
+      endCap,
+    )
+    if (!Number.isFinite(bbls)) return
+    rows.push({
+      height: fromHeightFeet(h, heightUnit),
+      volume: fromBbls(bbls, volUnit),
+    })
+  }
+
+  if (orientation === 'horizontal') {
+    const maxDiaUnits = fromInches(diameterIn, diaUnit)
+    if (!(maxDiaUnits > 0) || !Number.isFinite(maxDiaUnits)) return []
+
+    // Whole steps of 1 diameter-unit from 0 up to (but not past) full diameter.
+    const wholeSteps = Math.floor(maxDiaUnits + 1e-9)
+    for (let i = 0; i <= wholeSteps; i++) {
+      const heightIn = Math.min(toInches(i, diaUnit), diameterIn)
+      pushHeightFt(heightIn / 12)
+    }
+
+    // Include the exact full diameter when it is not already on a whole step.
+    if (maxDiaUnits - wholeSteps > 1e-9) {
+      pushHeightFt(maxHeightFt)
+    }
+
+    return rows
+  }
+
+  // Vertical: whole steps of 1 height-unit from 0 through full tank height.
+  const maxHeightUnits = fromHeightFeet(maxHeightFt, heightUnit)
+  if (!(maxHeightUnits > 0) || !Number.isFinite(maxHeightUnits)) return []
+
+  const wholeSteps = Math.floor(maxHeightUnits + 1e-9)
+  for (let i = 0; i <= wholeSteps; i++) {
+    const heightFt = Math.min(toHeightFeet(i, heightUnit), maxHeightFt)
+    pushHeightFt(heightFt)
+  }
+
+  if (maxHeightUnits - wholeSteps > 1e-9) {
+    pushHeightFt(maxHeightFt)
+  }
+
+  return rows
+}
+
+/**
+ * Build a horizontal-tank volume table. Prefer {@link tankVolumeTable} when
+ * orientation may be vertical.
  */
 export function horizontalTankVolumeTable(
   diameterIn: number,
@@ -367,45 +483,16 @@ export function horizontalTankVolumeTable(
   volUnit: VolUnit,
   offsetFt = 0,
 ): TankVolumeTableRow[] {
-  if (!(diameterIn > 0) || !(lengthFt > 0)) return []
-
-  const maxDiaUnits = fromInches(diameterIn, diaUnit)
-  if (!(maxDiaUnits > 0) || !Number.isFinite(maxDiaUnits)) return []
-
-  const offset =
-    Number.isFinite(offsetFt) && offsetFt > 0 ? offsetFt : 0
-
-  const rows: TankVolumeTableRow[] = []
-  const pushHeightIn = (heightIn: number) => {
-    const heightFt = heightIn / 12
-    const bbls = cylinderVolumeAboveOffsetBbls(
-      'horizontal',
-      diameterIn,
-      heightFt,
-      offset,
-      lengthFt,
-      endCap,
-    )
-    if (!Number.isFinite(bbls)) return
-    rows.push({
-      height: fromHeightFeet(heightFt, heightUnit),
-      volume: fromBbls(bbls, volUnit),
-    })
-  }
-
-  // Whole steps of 1 diameter-unit from 0 up to (but not past) full diameter.
-  const wholeSteps = Math.floor(maxDiaUnits + 1e-9)
-  for (let i = 0; i <= wholeSteps; i++) {
-    const heightIn = Math.min(toInches(i, diaUnit), diameterIn)
-    pushHeightIn(heightIn)
-  }
-
-  // Include the exact full diameter when it is not already on a whole step.
-  if (maxDiaUnits - wholeSteps > 1e-9) {
-    pushHeightIn(diameterIn)
-  }
-
-  return rows
+  return tankVolumeTable(
+    'horizontal',
+    diameterIn,
+    lengthFt,
+    endCap,
+    diaUnit,
+    heightUnit,
+    volUnit,
+    offsetFt,
+  )
 }
 
 /**
