@@ -2410,16 +2410,10 @@ function renderTankVolume(): void {
     const orientationLabel =
       orientation === 'horizontal' ? 'Horizontal' : 'Vertical'
     volumeTableTitle.textContent = `${orientationLabel} volume table`
-    if (orientation === 'horizontal') {
-      volumeTableHint.textContent =
-        'Horizontal tank: volume above the valve at each unit of the diameter UOM, with liquid height and volume in the selected units. Valve offset subtracts dead volume below the outlet.'
-    } else if (endCap === 'flat') {
-      volumeTableHint.textContent =
-        'Vertical tank: volume above the valve at each unit of the height UOM from empty through the entered liquid height. Valve offset subtracts dead volume below the outlet.'
-    } else {
-      volumeTableHint.textContent =
-        'Vertical tank: volume above the valve at each unit of the height UOM from empty through shell length plus both heads. Valve offset subtracts dead volume below the outlet.'
-    }
+    const endNote =
+      endCap === 'flat' ? 'flat ends' : `${endCapLabel(endCap)} ends`
+    volumeTableHint.textContent =
+      `${orientationLabel} tank (${endNote}): builds from your calculator selections — volume above the valve at each unit of the height UOM from empty through the entered liquid height (capped at full tank height when geometry limits it). Opening the table does not change Cylinder orientation.`
   }
 
   const renderVolumeTable = () => {
@@ -2471,10 +2465,11 @@ function renderTankVolume(): void {
     volumeTableExport.disabled = rows.length === 0
 
     if (rows.length === 0) {
-      const emptyMsg =
-        orientation === 'vertical' && endCap === 'flat'
-          ? 'Enter a positive diameter and liquid height to build the table.'
-          : 'Enter a positive diameter and cylinder length to build the table.'
+      const needsLength =
+        orientation === 'horizontal' || endCap !== 'flat'
+      const emptyMsg = needsLength
+        ? 'Enter a positive diameter, cylinder length, and liquid height to build the table.'
+        : 'Enter a positive diameter and liquid height to build the table.'
       volumeTableScroll.innerHTML = `<p class="volume-table-empty">${emptyMsg}</p>`
       return
     }
@@ -2493,10 +2488,10 @@ function renderTankVolume(): void {
       offsetFt > 0
         ? ` · volume above ${formatResult(fromHeightFeet(offsetFt, heightUnit), 4)} ${heightUnit} valve offset`
         : ''
-    const stepNote =
-      orientation === 'horizontal'
-        ? `Per ${diaUnit} of diameter`
-        : `Per ${heightUnit} of height`
+    const tableTopHeight = rows[rows.length - 1]?.height
+    const heightNote = Number.isFinite(tableTopHeight)
+      ? `through ${formatResult(tableTopHeight, 4)} ${heightUnit} liquid height`
+      : `through entered liquid height`
     const orientationNote =
       orientation === 'horizontal' ? 'Horizontal' : 'Vertical'
     const capsNote = ` · ${endCapLabel(endCap)} ends`
@@ -2504,7 +2499,7 @@ function renderTankVolume(): void {
     volumeTableScroll.innerHTML = `
       <table class="volume-table">
         <caption>
-          ${orientationNote}${capsNote} · ${stepNote} · ${rows.length} levels${offsetNote}
+          ${orientationNote}${capsNote} · ${heightNote} · Per ${heightUnit} · ${rows.length} levels${offsetNote}
         </caption>
         <thead>
           <tr>
@@ -2518,6 +2513,8 @@ function renderTankVolume(): void {
   }
 
   const showVolumeTable = () => {
+    // Keep the calculator's Cylinder orientation / end-cap selections as-is.
+    // The table is built from those selections plus Liquid height.
     volumeTableVisible = true
     volumeTableWrap.hidden = false
     renderVolumeTable()

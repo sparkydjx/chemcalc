@@ -376,45 +376,49 @@ export function tankFullHeightFt(
 /**
  * Build a tank volume table for the selected orientation and end caps.
  *
- * Horizontal: one row per unit of the diameter UOM from empty through full
- * (diameter). Vertical: one row per unit of the height UOM from empty through
- * full tank height (shell + heads, or `verticalFlatMaxHeightFt` for flat
- * ends). Volume is net above `offsetFt`, matching
- * {@link cylinderVolumeAboveOffsetBbls}.
+ * One row per unit of the height UOM from empty (0) through the entered
+ * `tableMaxHeightFt` (liquid height), clamped to the tank's geometric full
+ * height when one exists (horizontal: diameter; vertical with heads: shell +
+ * both heads). Volume is net above `offsetFt`, matching
+ * {@link cylinderVolumeAboveOffsetBbls}. Does not mutate caller state.
  */
 export function tankVolumeTable(
   orientation: CylinderOrientation,
   diameterIn: number,
   lengthFt: number,
   endCap: EndCapType,
-  diaUnit: DiaUnit,
+  _diaUnit: DiaUnit,
   heightUnit: HeightUnit,
   volUnit: VolUnit,
   offsetFt = 0,
-  /** Upper liquid height (ft) for vertical flat tanks (no geometric max). */
-  verticalFlatMaxHeightFt = 0,
+  /** Upper liquid height (ft) — the calculator Liquid height selection. */
+  tableMaxHeightFt = 0,
 ): TankVolumeTableRow[] {
   if (!(diameterIn > 0)) return []
+  if (!(tableMaxHeightFt > 0) || !Number.isFinite(tableMaxHeightFt)) return []
+  if (orientation === 'horizontal' && !(lengthFt > 0)) return []
+  if (
+    orientation === 'vertical' &&
+    endCap !== 'flat' &&
+    !(Number.isFinite(lengthFt) && lengthFt >= 0)
+  ) {
+    return []
+  }
 
   const offset =
     Number.isFinite(offsetFt) && offsetFt > 0 ? offsetFt : 0
 
-  let maxHeightFt: number
-  if (orientation === 'horizontal') {
-    if (!(lengthFt > 0)) return []
-    maxHeightFt = diameterIn / 12
-  } else if (endCap === 'flat') {
-    maxHeightFt = verticalFlatMaxHeightFt
-    if (!(maxHeightFt > 0) || !Number.isFinite(maxHeightFt)) return []
-  } else {
-    maxHeightFt = tankFullHeightFt(
-      orientation,
-      diameterIn,
-      lengthFt,
-      endCap,
-    )
-    if (!(maxHeightFt > 0) || !Number.isFinite(maxHeightFt)) return []
+  const geometricMaxFt = tankFullHeightFt(
+    orientation,
+    diameterIn,
+    lengthFt,
+    endCap,
+  )
+  let maxHeightFt = tableMaxHeightFt
+  if (Number.isFinite(geometricMaxFt)) {
+    maxHeightFt = Math.min(tableMaxHeightFt, geometricMaxFt)
   }
+  if (!(maxHeightFt > 0) || !Number.isFinite(maxHeightFt)) return []
 
   const rows: TankVolumeTableRow[] = []
   const pushHeightFt = (heightFt: number) => {
@@ -434,26 +438,7 @@ export function tankVolumeTable(
     })
   }
 
-  if (orientation === 'horizontal') {
-    const maxDiaUnits = fromInches(diameterIn, diaUnit)
-    if (!(maxDiaUnits > 0) || !Number.isFinite(maxDiaUnits)) return []
-
-    // Whole steps of 1 diameter-unit from 0 up to (but not past) full diameter.
-    const wholeSteps = Math.floor(maxDiaUnits + 1e-9)
-    for (let i = 0; i <= wholeSteps; i++) {
-      const heightIn = Math.min(toInches(i, diaUnit), diameterIn)
-      pushHeightFt(heightIn / 12)
-    }
-
-    // Include the exact full diameter when it is not already on a whole step.
-    if (maxDiaUnits - wholeSteps > 1e-9) {
-      pushHeightFt(maxHeightFt)
-    }
-
-    return rows
-  }
-
-  // Vertical: whole steps of 1 height-unit from 0 through full tank height.
+  // Whole steps of 1 height-unit from 0 through the selected liquid height.
   const maxHeightUnits = fromHeightFeet(maxHeightFt, heightUnit)
   if (!(maxHeightUnits > 0) || !Number.isFinite(maxHeightUnits)) return []
 
@@ -471,8 +456,8 @@ export function tankVolumeTable(
 }
 
 /**
- * Build a horizontal-tank volume table. Prefer {@link tankVolumeTable} when
- * orientation may be vertical.
+ * Build a horizontal-tank volume table through full diameter.
+ * Prefer {@link tankVolumeTable} with an explicit liquid-height max.
  */
 export function horizontalTankVolumeTable(
   diameterIn: number,
@@ -492,6 +477,7 @@ export function horizontalTankVolumeTable(
     heightUnit,
     volUnit,
     offsetFt,
+    diameterIn / 12,
   )
 }
 
