@@ -63,14 +63,21 @@ export function dosageBblsPerDay(galsPerDay: number, targetPpm: number): number 
 }
 
 /**
- * Pipeline mils dosage: length (miles) × diameter (in) × target mils = gallons chemical.
+ * Empirical factor for pipeline mils film dosage
+ * (length miles × diameter in × mils × factor → gallons chemical).
+ */
+export const MILS_DOSAGE_GAL_FACTOR = 0.4803
+
+/**
+ * Pipeline mils dosage:
+ * length (miles) × diameter (in) × target mils × 0.4803 = gallons chemical.
  */
 export function milsDosageGallons(
   lengthMiles: number,
   diameterIn: number,
   targetMils: number,
 ): number {
-  return lengthMiles * diameterIn * targetMils
+  return lengthMiles * diameterIn * targetMils * MILS_DOSAGE_GAL_FACTOR
 }
 
 /** Solve mils dosage for target mils thickness. */
@@ -79,7 +86,7 @@ export function milsDosageTargetMils(
   lengthMiles: number,
   diameterIn: number,
 ): number {
-  return gallons / (lengthMiles * diameterIn)
+  return gallons / (lengthMiles * diameterIn * MILS_DOSAGE_GAL_FACTOR)
 }
 
 /** Solve mils dosage for pipeline diameter (in). */
@@ -88,7 +95,7 @@ export function milsDosageDiameterIn(
   lengthMiles: number,
   targetMils: number,
 ): number {
-  return gallons / (lengthMiles * targetMils)
+  return gallons / (lengthMiles * targetMils * MILS_DOSAGE_GAL_FACTOR)
 }
 
 /** Solve mils dosage for pipeline length (miles). */
@@ -97,7 +104,7 @@ export function milsDosageLengthMiles(
   diameterIn: number,
   targetMils: number,
 ): number {
-  return gallons / (diameterIn * targetMils)
+  return gallons / (diameterIn * targetMils * MILS_DOSAGE_GAL_FACTOR)
 }
 
 /** US gal per ft³ used by the displacement (and related) formulas. */
