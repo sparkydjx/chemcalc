@@ -1504,12 +1504,24 @@ function renderDosage(
   }
 }
 
-function displacementFormHtml(idPrefix = ''): string {
+function displacementFormHtml(
+  idPrefix = '',
+  defaults: {
+    diameter?: number
+    length?: number
+    endCap?: EndCapType
+  } = {},
+): string {
   const id = (name: string) => `${idPrefix}${name}`
+  const diameter = defaults.diameter ?? 12
+  const length = defaults.length ?? 5280
+  const endCap = defaults.endCap ?? 'flat'
+  const endCapSelected = (value: EndCapType) =>
+    value === endCap ? ' selected' : ''
   return `
     ${field('Diameter', {
       id: id('dia'),
-      value: 12,
+      value: diameter,
       min: '0',
       unitOptions: [
         { value: 'in', label: 'in' },
@@ -1532,16 +1544,16 @@ function displacementFormHtml(idPrefix = ''): string {
       </div>
       <span class="field-controls">
         <select id="${id('end-cap')}" aria-label="End caps">
-          <option value="flat" selected>Flat</option>
-          <option value="hemispherical">Hemispherical</option>
-          <option value="elliptical">Elliptical (2:1)</option>
-          <option value="torispherical">Torispherical (ASME F&amp;D)</option>
+          <option value="flat"${endCapSelected('flat')}>Flat</option>
+          <option value="hemispherical"${endCapSelected('hemispherical')}>Hemispherical</option>
+          <option value="elliptical"${endCapSelected('elliptical')}>Elliptical (2:1)</option>
+          <option value="torispherical"${endCapSelected('torispherical')}>Torispherical (ASME F&amp;D)</option>
         </select>
       </span>
     </div>
     ${field('Length', {
       id: id('len'),
-      value: 5280,
+      value: length,
       min: '0',
       unitOptions: [
         { value: 'ft', label: 'ft' },
@@ -2104,7 +2116,11 @@ function renderScavengerEfficiency(): void {
         </div>
         ${sectionTitle('Volume Displacement')}
         <div id="scavenger-displacement-panel" class="embedded-calc">
-          ${displacementFormHtml('se-')}
+          ${displacementFormHtml('se-', {
+            diameter: 48,
+            length: 20,
+            endCap: 'torispherical',
+          })}
         </div>
       </form>
     `,
