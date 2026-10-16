@@ -573,7 +573,7 @@ function renderDosage(
                   unitId: 'mf-len-unit',
                   unitValue: 'miles',
                   solveKey: 'len',
-                  help: 'Pipeline length. Used for line volume (PPM), mils dosage (Film Thickness), and contact time when velocity is included. Mils formula uses miles: length (miles) × diameter (in) × target mils × 0.4803 = gallons.',
+                  help: 'Pipeline length. Used for line volume (PPM), mils dosage (Film Thickness), and contact time when velocity is included. Mils formula uses miles: length (miles) × diameter (in) × target mils × 0.4308 = gallons.',
                 })}
               </div>
             </div>
@@ -666,7 +666,7 @@ function renderDosage(
               unitValue: 'Gals/Day',
               solveKey: 'gals',
               solved: true,
-              help: 'Continuous: chemical volume (miles × in × mils × 0.4803) divided by treatment duration. Batch: total chemical volume (miles × in × mils × 0.4803).',
+              help: 'Continuous: chemical volume (miles × in × mils × 0.4308) divided by treatment duration. Batch: total chemical volume (miles × in × mils × 0.4308).',
             })}
           </div>
         </div>
@@ -1467,7 +1467,7 @@ function renderDosage(
             helpSummary.setAttribute('aria-label', 'Explain Volume')
           if (helpBody) {
             helpBody.textContent =
-              'Total chemical volume: length (miles) × diameter (in) × target thickness (mils) × 0.4803.'
+              'Total chemical volume: length (miles) × diameter (in) × target thickness (mils) × 0.4308.'
           }
           setSelectOptions(galsUnitEl, filmBatchVolumeUnits, 'Gals')
         } else {
@@ -1476,7 +1476,7 @@ function renderDosage(
             helpSummary.setAttribute('aria-label', 'Explain Injection rate')
           if (helpBody) {
             helpBody.textContent =
-              'Chemical volume (miles × in × mils × 0.4803) divided by treatment duration.'
+              'Chemical volume (miles × in × mils × 0.4308) divided by treatment duration.'
           }
           setSelectOptions(galsUnitEl, injectionRateUnits, 'Gals/Day')
         }
