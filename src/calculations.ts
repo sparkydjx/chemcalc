@@ -66,11 +66,11 @@ export function dosageBblsPerDay(galsPerDay: number, targetPpm: number): number 
  * Empirical factor for pipeline mils film dosage
  * (length miles × diameter in × mils × factor → gallons chemical).
  */
-export const MILS_DOSAGE_GAL_FACTOR = 0.4803
+export const MILS_DOSAGE_GAL_FACTOR = 0.4308
 
 /**
  * Pipeline mils dosage:
- * length (miles) × diameter (in) × target mils × 0.4803 = gallons chemical.
+ * length (miles) × diameter (in) × target mils × 0.4308 = gallons chemical.
  */
 export function milsDosageGallons(
   lengthMiles: number,
